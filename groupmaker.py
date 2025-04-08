@@ -16,6 +16,8 @@ IMPORTANT: You need a service-account-credentials.json file to use this script.
 
 import os
 import argparse
+import re
+import time
 from googleapiclient.discovery import build
 from google.oauth2 import service_account
 
@@ -53,6 +55,22 @@ def create_service():
     service = build('admin', 'directory_v1', credentials=delegated_credentials)
     return service
 
+def validate_group_name(group_name):
+    """Validate that the group name is valid."""
+    # Check if it's an email address
+    if '@' in group_name:
+        print(f"ERROR: Group name '{group_name}' cannot contain '@' symbol.")
+        print("The group name should be simple text like 'class-a-2023' (not an email address).")
+        return False
+    
+    # Check for valid characters (letters, numbers, hyphens, underscores, periods)
+    if not re.match(r'^[a-zA-Z0-9.\-_]+$', group_name):
+        print(f"ERROR: Group name '{group_name}' contains invalid characters.")
+        print("Group names can only contain letters, numbers, periods, hyphens, and underscores.")
+        return False
+    
+    return True
+
 def create_group(service, group_name, group_description=""):
     """Create a new Google Group."""
     email = f"{group_name}@{DOMAIN}"
@@ -79,7 +97,7 @@ def create_group(service, group_name, group_description=""):
         print(f"Error creating group: {e}")
         return None
 
-def add_member(service, group_email, member_email, role="MEMBER"):
+def add_member(service, group_email, member_email, role="MEMBER", retry=True):
     """Add a member to the specified Google Group."""
     member_body = {
         "email": member_email,
@@ -95,13 +113,37 @@ def add_member(service, group_email, member_email, role="MEMBER"):
         print(f"Added {member_email} to {group_email} as {role}")
         return result
     except Exception as e:
-        print(f"Error adding member: {e}")
-        return None
+        if retry and "Resource Not Found: groupKey" in str(e):
+            print(f"Group not found yet. Waiting a moment before retrying...")
+            # Wait a moment for the group to propagate
+            time.sleep(5)
+            return add_member(service, group_email, member_email, role, retry=False)
+        else:
+            print(f"Error adding member: {e}")
+            print(f"HINT: If the error mentions 'groupKey', the group may still be propagating in Google's system.")
+            return None
+
+def ensure_group_exists(service, group_email, max_attempts=3, delay=3):
+    """Check if a group exists and wait for it to be available."""
+    for attempt in range(max_attempts):
+        try:
+            group = service.groups().get(groupKey=group_email).execute()
+            print(f"Confirmed group exists: {group_email}")
+            return True
+        except Exception as e:
+            if "Resource Not Found" in str(e) and attempt < max_attempts - 1:
+                print(f"Group not found yet (attempt {attempt+1}/{max_attempts}). Waiting {delay} seconds...")
+                time.sleep(delay)
+            else:
+                print(f"Error checking group: {e}")
+                return False
+    
+    return False
 
 def main():
     # Set up command line arguments
     parser = argparse.ArgumentParser(description='Create a Google Group and add members')
-    parser.add_argument('group_name', help='Name for the Google Group (what goes before @domain.com)')
+    parser.add_argument('group_name', help='Name for the Google Group (what goes before @domain.com, e.g., "class-a-2023")')
     parser.add_argument('trainer_email', help='Email address of the external trainer')
     parser.add_argument('--skip-self', action='store_true', 
                         help='Skip adding yourself to the group')
@@ -112,22 +154,41 @@ def main():
     
     args = parser.parse_args()
     
+    # Validate the group_name
+    if not validate_group_name(args.group_name):
+        print("\nUSAGE EXAMPLE:")
+        print(f"  ./groupmaker.py class-a-2023 external.trainer@example.com")
+        return
+    
     # Create the service
     service = create_service()
+    if not service:
+        return
     
     # Create the Google Group
     group_email = f"{args.group_name}@{DOMAIN}"
+    print(f"Creating group: {group_email}...")
     group = create_group(service, args.group_name, args.description)
     
     if group:
+        # Wait a moment for the group to propagate through Google's system
+        print("Waiting for the group to be fully created in Google's system...")
+        time.sleep(3)
+        
+        # Verify the group exists before proceeding
+        if not ensure_group_exists(service, group_email):
+            print("Could not verify group creation. Proceeding anyway, but member addition might fail.")
+        
         # Add the external trainer
+        print(f"Adding trainer: {args.trainer_email}...")
         add_member(service, group_email, args.trainer_email)
         
         # Add yourself by default unless --skip-self is specified
         if not args.skip_self:
+            print(f"Adding yourself: {args.self_email}...")
             add_member(service, group_email, args.self_email)
         
-        print(f"Group setup complete. Group email: {group_email}")
+        print(f"\nGroup setup complete. Group email: {group_email}")
     else:
         print("Failed to create group. Check logs for details.")
 

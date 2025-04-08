@@ -18,6 +18,7 @@ import os
 import argparse
 import re
 import time
+import sys
 from googleapiclient.discovery import build
 from google.oauth2 import service_account
 
@@ -140,24 +141,59 @@ def ensure_group_exists(service, group_email, max_attempts=3, delay=3):
     
     return False
 
+def delete_group(service, group_email):
+    """Delete a Google Group after confirmation."""
+    # First check if the group exists
+    try:
+        service.groups().get(groupKey=group_email).execute()
+    except Exception as e:
+        print(f"Error: Group {group_email} not found or cannot be accessed.")
+        print(f"Details: {e}")
+        return False
+    
+    # Ask for confirmation
+    print(f"\nABOUT TO DELETE GROUP: {group_email}")
+    print("This action cannot be undone and will remove all members and content.")
+    confirmation = input("Are you sure you want to delete this group? (type 'yes' to confirm): ")
+    
+    if confirmation.lower() != 'yes':
+        print("Deletion cancelled.")
+        return False
+    
+    # Proceed with deletion
+    try:
+        service.groups().delete(groupKey=group_email).execute()
+        print(f"Group {group_email} has been successfully deleted.")
+        return True
+    except Exception as e:
+        print(f"Error deleting group: {e}")
+        return False
+
 def main():
     # Set up command line arguments
-    parser = argparse.ArgumentParser(description='Create a Google Group and add members')
-    parser.add_argument('group_name', help='Name for the Google Group (what goes before @domain.com, e.g., "class-a-2023")')
-    parser.add_argument('trainer_email', help='Email address of the external trainer')
-    parser.add_argument('--skip-self', action='store_true', 
+    parser = argparse.ArgumentParser(description='Create or delete a Google Group')
+    subparsers = parser.add_subparsers(dest='command', help='Command to execute')
+    
+    # Create command
+    create_parser = subparsers.add_parser('create', help='Create a new Google Group')
+    create_parser.add_argument('group_name', help='Name for the Google Group (what goes before @domain.com, e.g., "class-a-2023")')
+    create_parser.add_argument('trainer_email', help='Email address of the external trainer')
+    create_parser.add_argument('--skip-self', action='store_true', 
                         help='Skip adding yourself to the group')
-    parser.add_argument('--self-email', default=DEFAULT_ADMIN_EMAIL,
+    create_parser.add_argument('--self-email', default=DEFAULT_ADMIN_EMAIL,
                         help=f'Your email address (defaults to {DEFAULT_ADMIN_EMAIL})')
-    parser.add_argument('--description', default='',
+    create_parser.add_argument('--description', default='',
                         help='Optional description for the group')
+    
+    # Delete command
+    delete_parser = subparsers.add_parser('delete', help='Delete an existing Google Group')
+    delete_parser.add_argument('group_name', help='Name of the Google Group to delete (what goes before @domain.com)')
     
     args = parser.parse_args()
     
-    # Validate the group_name
-    if not validate_group_name(args.group_name):
-        print("\nUSAGE EXAMPLE:")
-        print(f"  ./groupmaker.py class-a-2023 external.trainer@example.com")
+    # If no command is specified, show help
+    if not args.command:
+        parser.print_help()
         return
     
     # Create the service
@@ -165,32 +201,50 @@ def main():
     if not service:
         return
     
-    # Create the Google Group
-    group_email = f"{args.group_name}@{DOMAIN}"
-    print(f"Creating group: {group_email}...")
-    group = create_group(service, args.group_name, args.description)
-    
-    if group:
-        # Wait a moment for the group to propagate through Google's system
-        print("Waiting for the group to be fully created in Google's system...")
-        time.sleep(3)
+    if args.command == 'create':
+        # Validate the group_name
+        if not validate_group_name(args.group_name):
+            print("\nUSAGE EXAMPLE:")
+            print(f"  ./groupmaker.py create class-a-2023 external.trainer@example.com")
+            return
         
-        # Verify the group exists before proceeding
-        if not ensure_group_exists(service, group_email):
-            print("Could not verify group creation. Proceeding anyway, but member addition might fail.")
+        # Create the Google Group
+        group_email = f"{args.group_name}@{DOMAIN}"
+        print(f"Creating group: {group_email}...")
+        group = create_group(service, args.group_name, args.description)
         
-        # Add the external trainer
-        print(f"Adding trainer: {args.trainer_email}...")
-        add_member(service, group_email, args.trainer_email)
+        if group:
+            # Wait a moment for the group to propagate through Google's system
+            print("Waiting for the group to be fully created in Google's system...")
+            time.sleep(3)
+            
+            # Verify the group exists before proceeding
+            if not ensure_group_exists(service, group_email):
+                print("Could not verify group creation. Proceeding anyway, but member addition might fail.")
+            
+            # Add the external trainer
+            print(f"Adding trainer: {args.trainer_email}...")
+            add_member(service, group_email, args.trainer_email)
+            
+            # Add yourself by default unless --skip-self is specified
+            if not args.skip_self:
+                print(f"Adding yourself: {args.self_email}...")
+                add_member(service, group_email, args.self_email)
+            
+            print(f"\nGroup setup complete. Group email: {group_email}")
+        else:
+            print("Failed to create group. Check logs for details.")
+            
+    elif args.command == 'delete':
+        # Validate the group_name
+        if not validate_group_name(args.group_name):
+            print("\nUSAGE EXAMPLE:")
+            print(f"  ./groupmaker.py delete class-a-2023")
+            return
         
-        # Add yourself by default unless --skip-self is specified
-        if not args.skip_self:
-            print(f"Adding yourself: {args.self_email}...")
-            add_member(service, group_email, args.self_email)
-        
-        print(f"\nGroup setup complete. Group email: {group_email}")
-    else:
-        print("Failed to create group. Check logs for details.")
+        # Delete the Google Group
+        group_email = f"{args.group_name}@{DOMAIN}"
+        delete_group(service, group_email)
 
 if __name__ == "__main__":
     main()

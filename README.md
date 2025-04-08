@@ -1,14 +1,15 @@
-# Group Maker
+# Google Group Maker
 
-A command-line utility for automating the creation of Google Groups and adding members.
+A command-line utility for automating the creation and management of Google Groups.
 
 ## Overview
 
 This script automates the process of:
 
-1. Creating a new Google Group in your organization
-2. Adding an external trainer to the group
-3. Optionally adding yourself to the group
+1. Creating new Google Groups in your organization
+2. Adding members to groups
+3. Listing existing groups with filtering options
+4. Deleting groups with confirmation
 
 ## Requirements
 
@@ -42,25 +43,74 @@ This script automates the process of:
 
 ## Usage
 
-Basic usage:
+The script now supports multiple commands with different functionality:
+
+### Creating a Group
 
 ```bash
-./groupmaker.py group_name trainer_email
+./groupmaker.py create GROUP_NAME TRAINER_EMAIL [options]
 ```
 
 Example:
 
 ```bash
-./groupmaker.py python-class-feb2023 external_trainer@example.com
+./groupmaker.py create python-class-feb2023 external_trainer@example.com
 ```
 
-### Command Line Arguments
-
--   `group_name`: Name for the Google Group (what goes before @domain.com)
--   `trainer_email`: Email address of the external trainer
+**Options:**
 -   `--skip-self`: Optional flag to skip adding yourself to the group
 -   `--self-email`: Your email address (defaults to the admin email in the script)
 -   `--description`: Optional description for the group
+
+### Listing Groups
+
+```bash
+./groupmaker.py list [options]
+```
+
+This will display all Google Groups in your domain in a formatted table.
+
+**Options:**
+-   `--query TEXT`: Filter groups containing this text in their email, name, or description
+-   `--max-results NUMBER`: Maximum number of results to return per page (default: 100)
+
+Example:
+
+```bash
+# List all groups
+./groupmaker.py list
+
+# List groups with "class" in their name, email or description
+./groupmaker.py list --query class
+```
+
+### Deleting a Group
+
+```bash
+./groupmaker.py delete GROUP_NAME
+```
+
+This will delete a Google Group after confirmation. For safety, you must type 'yes' to confirm deletion.
+
+Example:
+
+```bash
+./groupmaker.py delete python-class-feb2023
+```
+
+### Getting Help
+
+```bash
+./groupmaker.py --help
+```
+
+To get help for specific commands:
+
+```bash
+./groupmaker.py create --help
+./groupmaker.py list --help
+./groupmaker.py delete --help
+```
 
 ## Configuration
 
@@ -75,3 +125,11 @@ The service account needs the following OAuth scopes:
 
 -   https://www.googleapis.com/auth/admin.directory.group
 -   https://www.googleapis.com/auth/admin.directory.group.member
+
+## Git Branch for Development
+
+If you're developing new features, create a feature branch:
+
+```bash
+git checkout -b feature/group-management
+```

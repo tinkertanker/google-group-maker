@@ -169,6 +169,74 @@ def delete_group(service, group_email):
         print(f"Error deleting group: {e}")
         return False
 
+def list_groups(service, domain=DOMAIN, query=None, max_results=100):
+    """List Google Groups in the domain with optional filtering."""
+    groups = []
+    page_token = None
+    
+    print(f"Fetching groups from domain: {domain}...")
+    
+    try:
+        while True:
+            # Prepare request parameters
+            params = {
+                'domain': domain,
+                'maxResults': max_results
+            }
+            
+            # Add page token if we're on subsequent pages
+            if page_token:
+                params['pageToken'] = page_token
+            
+            # Execute the API request to list groups
+            results = service.groups().list(**params).execute()
+            
+            # Add groups from this page to our collection
+            if 'groups' in results:
+                # If a query is provided, filter the results locally
+                if query:
+                    filtered_groups = [
+                        group for group in results['groups']
+                        if (query.lower() in group.get('email', '').lower() or
+                            query.lower() in group.get('name', '').lower() or
+                            query.lower() in group.get('description', '').lower())
+                    ]
+                    groups.extend(filtered_groups)
+                else:
+                    groups.extend(results['groups'])
+                
+            # Check if there are more pages
+            page_token = results.get('nextPageToken')
+            if not page_token:
+                break
+        
+        # Print results in a formatted way
+        if groups:
+            separator_line = "-" * 120
+            print(f"\nFound {len(groups)} groups:")
+            print(separator_line)
+            print(f"{'EMAIL ADDRESS':<40} {'NAME':<30} {'DESCRIPTION'}")
+            print(separator_line)
+            
+            for group in groups:
+                email = group.get('email', 'N/A')
+                name = group.get('name', 'N/A')
+                description = group.get('description', '')
+                
+                # Truncate long descriptions for display
+                if description and len(description) > 30:
+                    description = description[:27] + "..."
+                    
+                print(f"{email:<40} {name:<30} {description}")
+        else:
+            print("No groups found matching your criteria.")
+            
+        return groups
+            
+    except Exception as e:
+        print(f"Error listing groups: {e}")
+        return []
+
 def main():
     # Set up command line arguments
     parser = argparse.ArgumentParser(description='Create or delete a Google Group')
@@ -188,6 +256,12 @@ def main():
     # Delete command
     delete_parser = subparsers.add_parser('delete', help='Delete an existing Google Group')
     delete_parser.add_argument('group_name', help='Name of the Google Group to delete (what goes before @domain.com)')
+    
+    # List command
+    list_parser = subparsers.add_parser('list', help='List Google Groups in the domain')
+    list_parser.add_argument('--query', help='Search query to filter groups (e.g., "class" to find all class groups)')
+    list_parser.add_argument('--max-results', type=int, default=100, 
+                      help='Maximum number of results to return per page (default: 100)')
     
     args = parser.parse_args()
     
@@ -245,6 +319,10 @@ def main():
         # Delete the Google Group
         group_email = f"{args.group_name}@{DOMAIN}"
         delete_group(service, group_email)
+    
+    elif args.command == 'list':
+        # List Google Groups in the domain with optional filtering
+        list_groups(service, domain=DOMAIN, query=args.query, max_results=args.max_results)
 
 if __name__ == "__main__":
     main()

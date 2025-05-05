@@ -22,9 +22,16 @@ import sys
 from googleapiclient.discovery import build
 from google.oauth2 import service_account
 
-# Constants - replace with your domain
-DOMAIN = "tinkertanker.com"  # Replace with your actual domain
-DEFAULT_ADMIN_EMAIL = "yjsoon@tinkertanker.com"  # Default admin email
+# Try to load .env file if available
+try:
+    from dotenv import load_dotenv
+    load_dotenv()  # Load environment variables from .env if it exists
+except ImportError:
+    pass  # dotenv is optional
+
+# Constants - configure with environment variables or use defaults
+DOMAIN = os.environ.get("GOOGLE_GROUP_DOMAIN", "tinkertanker.com")
+DEFAULT_ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "yjsoon@tinkertanker.com")
 
 def create_service():
     """Create and return an authorized service object for the Google Directory API."""

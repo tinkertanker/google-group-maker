@@ -2,6 +2,26 @@
 
 A command-line utility for automating the creation and management of Google Groups.
 
+## Quick Start
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Set up service account credentials
+cp service-account-credentials.example.json service-account-credentials.json
+# Edit service-account-credentials.json with your actual credentials
+
+# Make script executable
+chmod +x groupmaker.py
+
+# Create a new group with an external trainer
+./groupmaker.py create python-class-feb2023 external_trainer@example.com
+
+# List all groups
+./groupmaker.py list
+```
+
 ## Overview
 
 This script automates the process of:
@@ -41,9 +61,19 @@ This script automates the process of:
     chmod +x groupmaker.py
     ```
 
+4. **Configuration Options:**
+
+    You can set default values using environment variables or a `.env` file:
+    ```
+    GOOGLE_GROUP_DOMAIN=yourdomain.com
+    ADMIN_EMAIL=admin@yourdomain.com
+    ```
+    
+    Create a `.env` file in the same directory as the script to automatically load these settings.
+
 ## Usage
 
-The script now supports multiple commands with different functionality:
+The script supports multiple commands with different functionality:
 
 ### Creating a Group
 
@@ -55,6 +85,15 @@ Example:
 
 ```bash
 ./groupmaker.py create python-class-feb2023 external_trainer@example.com
+```
+
+**Expected Output:**
+```
+Creating group: python-class-feb2023@tinkertanker.com
+Group created successfully
+Adding trainer external_trainer@example.com to group
+Adding admin yjsoon@tinkertanker.com to group
+All members added successfully
 ```
 
 **Options:**
@@ -69,6 +108,17 @@ Example:
 ```
 
 This will display all Google Groups in your domain in a formatted table.
+
+**Expected Output:**
+```
++--------------------------------+-----------------------------+-------------------------------+
+| Group Email                    | Name                        | Description                   |
++--------------------------------+-----------------------------+-------------------------------+
+| python-class-feb2023@...com    | python-class-feb2023        | Python class February 2023    |
+| java-workshop-apr2023@...com   | java-workshop-apr2023       | Java workshop April 2023      |
++--------------------------------+-----------------------------+-------------------------------+
+Total groups: 2
+```
 
 **Options:**
 -   `--query TEXT`: Filter groups containing this text in their email, name, or description
@@ -92,6 +142,12 @@ Example:
 
 This will delete a Google Group after confirmation. For safety, you must type 'yes' to confirm deletion.
 
+**Expected Output:**
+```
+Are you sure you want to delete the group python-class-feb2023@tinkertanker.com? (yes/no): yes
+Group python-class-feb2023@tinkertanker.com deleted successfully.
+```
+
 Example:
 
 ```bash
@@ -114,10 +170,46 @@ To get help for specific commands:
 
 ## Configuration
 
-The script uses the following default values that can be modified in the code:
+The script uses the following default values that can be configured using environment variables:
 
--   Domain: tinkertanker.com
--   Default admin email: yjsoon@tinkertanker.com
+-   Domain: tinkertanker.com (can be set with `GOOGLE_GROUP_DOMAIN` environment variable)
+-   Default admin email: yjsoon@tinkertanker.com (can be set with `ADMIN_EMAIL` environment variable)
+
+Example of using environment variables:
+
+```bash
+# Set for a single command
+GOOGLE_GROUP_DOMAIN=example.com ADMIN_EMAIL=admin@example.com ./groupmaker.py list
+
+# Or export for the current shell session
+export GOOGLE_GROUP_DOMAIN=example.com
+export ADMIN_EMAIL=admin@example.com
+./groupmaker.py create new-group trainer@example.com
+```
+
+## Troubleshooting
+
+### Common Errors
+
+1. **Authentication Failed**: 
+   - Check that your service-account-credentials.json file is correctly formatted and has the proper permissions
+   - Verify that the service account has been granted domain-wide delegation
+
+2. **Permission Denied**:
+   - Ensure the service account has been granted proper OAuth scopes in the Google Admin console
+   - Verify the admin email specified has Admin privileges in your GSuite/Workspace
+
+3. **Rate Limiting**:
+   - The script includes a delay between operations to avoid API rate limits
+   - If you encounter rate limiting errors, try increasing the delay value in the code
+
+### Debug Mode
+
+Run the script with the `--debug` flag to enable verbose logging:
+
+```bash
+./groupmaker.py create python-class-feb2023 external_trainer@example.com --debug
+```
 
 ## Permissions
 
@@ -126,7 +218,23 @@ The service account needs the following OAuth scopes:
 -   https://www.googleapis.com/auth/admin.directory.group
 -   https://www.googleapis.com/auth/admin.directory.group.member
 
-## Git Branch for Development
+## Contributing
+
+Contributions to Google Group Maker are welcome! Here's how you can contribute:
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/your-feature-name`
+3. Make your changes and commit them: `git commit -m 'Add some feature'`
+4. Push to the branch: `git push origin feature/your-feature-name`
+5. Open a pull request
+
+Please follow these best practices:
+- Include clear commit messages
+- Add or update documentation as needed
+- Add appropriate error handling
+- Test your changes thoroughly
+
+## Development
 
 If you're developing new features, create a feature branch:
 

@@ -18,8 +18,11 @@ chmod +x groupmaker.py
 # Create a new group with an external trainer
 ./groupmaker.py create python-class-feb2023 external_trainer@example.com
 
-# Create a group in a specific domain
+# Create a group in a specific domain (using --domain parameter)
 ./groupmaker.py --domain example.org create python-class-feb2023 external_trainer@example.com
+
+# Create a group in a specific domain (specifying domain in group name)
+./groupmaker.py create python-class-feb2023@example.org external_trainer@example.com
 
 # List all groups
 ./groupmaker.py list
@@ -88,7 +91,14 @@ The script supports multiple commands with different functionality:
 Example:
 
 ```bash
+# Basic usage
 ./groupmaker.py create python-class-feb2023 external_trainer@example.com
+
+# Specify the domain as part of the group name
+./groupmaker.py create python-class-feb2023@example.org external_trainer@example.com
+
+# Using the --domain parameter
+./groupmaker.py --domain example.org create python-class-feb2023 external_trainer@example.com
 ```
 
 **Expected Output:**
@@ -155,7 +165,14 @@ Group python-class-feb2023@tinkertanker.com deleted successfully.
 Example:
 
 ```bash
+# Basic usage
 ./groupmaker.py delete python-class-feb2023
+
+# Specify the domain as part of the group name
+./groupmaker.py delete python-class-feb2023@example.org
+
+# Using the --domain parameter
+./groupmaker.py --domain example.org delete python-class-feb2023
 ```
 
 ### Renaming a Group
@@ -174,7 +191,14 @@ Successfully renamed group from old-name@tinkertanker.com to new-name@tinkertank
 Example:
 
 ```bash
+# Basic usage
 ./groupmaker.py rename python-class-feb2023 python-class-march2023
+
+# Specify the domain in group names
+./groupmaker.py rename python-class-feb2023@example.org python-class-march2023
+
+# Using the --domain parameter
+./groupmaker.py --domain example.org rename python-class-feb2023 python-class-march2023
 ```
 
 ### Getting Help
@@ -196,10 +220,27 @@ To get help for specific commands:
 
 The script uses the following default values that can be configured:
 
--   Domain: tinkertanker.com (can be set with `--domain` parameter or `GOOGLE_GROUP_DOMAIN` environment variable)
+-   Domain: tinkertanker.com (can be set in multiple ways)
 -   Default admin email: yjsoon@tinkertanker.com (can be set with `ADMIN_EMAIL` environment variable)
 
-Example of using the domain parameter:
+### Domain Configuration Priority
+
+When determining which domain to use, the script uses the following priority order:
+
+1. Domain specified in the group name itself (e.g., `group@example.com`)
+2. Domain specified with the `--domain` command-line parameter 
+3. Domain specified with the `GOOGLE_GROUP_DOMAIN` environment variable
+4. Default domain (tinkertanker.com)
+
+### Example: Specifying Domain in Group Name
+
+```bash
+# Specify domain directly in the group name - highest priority
+./groupmaker.py create new-group@example.org trainer@example.com
+./groupmaker.py delete group-name@example.org
+```
+
+### Example: Using the Domain Parameter
 
 ```bash
 # Set domain for a single command
@@ -209,7 +250,7 @@ Example of using the domain parameter:
 ./groupmaker.py -d example.org list
 ```
 
-Example of using environment variables:
+### Example: Using Environment Variables
 
 ```bash
 # Set for a single command
@@ -220,8 +261,6 @@ export GOOGLE_GROUP_DOMAIN=example.com
 export ADMIN_EMAIL=admin@example.com
 ./groupmaker.py create new-group trainer@example.com
 ```
-
-Note: The `--domain` parameter takes precedence over the `GOOGLE_GROUP_DOMAIN` environment variable.
 
 ## Troubleshooting
 

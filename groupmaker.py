@@ -12,9 +12,12 @@ Requirements:
 Usage examples:
 - Create a group: ./groupmaker.py create group-name trainer@example.com
 - Create a group in a specific domain: ./groupmaker.py --domain example.org create group-name trainer@example.com
+- Create a group (specifying domain in group name): ./groupmaker.py create group-name@example.org trainer@example.com
 - List groups: ./groupmaker.py list
 - Rename a group: ./groupmaker.py rename old-name new-name
+- Rename a group (specifying domain): ./groupmaker.py rename old-name@example.org new-name
 - Delete a group: ./groupmaker.py delete group-name
+- Delete a group (specifying domain): ./groupmaker.py delete group-name@example.org
 
 IMPORTANT: You need a service-account-credentials.json file to use this script.
            Check the company Notion documentation for instructions on obtaining this file.
@@ -71,20 +74,37 @@ def create_service():
     return service
 
 def validate_group_name(group_name):
-    """Validate that the group name is valid."""
-    # Check if it's an email address
+    """
+    Validate that the group name is valid.
+    
+    This function accepts either:
+    - Simple group name (e.g., 'class-a-2023')
+    - Full email address (e.g., 'class-a-2023@example.com')
+    
+    Returns:
+    - If valid, returns a tuple (is_valid, group_name, domain_from_email)
+      where domain_from_email is None for simple group names
+    - If invalid, returns (False, None, None)
+    """
+    domain_from_email = None
+    
+    # Check if it's an email address and extract domain if it is
     if '@' in group_name:
-        print(f"ERROR: Group name '{group_name}' cannot contain '@' symbol.")
-        print("The group name should be simple text like 'class-a-2023' (not an email address).")
-        return False
+        parts = group_name.split('@')
+        if len(parts) != 2:
+            print(f"ERROR: Invalid email format '{group_name}'.")
+            print("Email format should be 'group-name@domain.com'.")
+            return False, None, None
+        
+        group_name, domain_from_email = parts
     
     # Check for valid characters (letters, numbers, hyphens, underscores, periods)
     if not re.match(r'^[a-zA-Z0-9.\-_]+$', group_name):
         print(f"ERROR: Group name '{group_name}' contains invalid characters.")
         print("Group names can only contain letters, numbers, periods, hyphens, and underscores.")
-        return False
+        return False, None, None
     
-    return True
+    return True, group_name, domain_from_email
 
 def create_group(service, group_name, group_description="", domain=None):
     """Create a new Google Group."""
@@ -262,7 +282,7 @@ def main():
     
     # Create command
     create_parser = subparsers.add_parser('create', help='Create a new Google Group')
-    create_parser.add_argument('group_name', help='Name for the Google Group (what goes before @domain.com, e.g., "class-a-2023")')
+    create_parser.add_argument('group_name', help='Name for the Google Group (e.g., "class-a-2023" or "class-a-2023@example.com")')
     create_parser.add_argument('trainer_email', help='Email address of the external trainer')
     create_parser.add_argument('--skip-self', action='store_true', 
                         help='Skip adding yourself to the group')
@@ -273,7 +293,7 @@ def main():
     
     # Delete command
     delete_parser = subparsers.add_parser('delete', help='Delete an existing Google Group')
-    delete_parser.add_argument('group_name', help='Name of the Google Group to delete (what goes before @domain.com)')
+    delete_parser.add_argument('group_name', help='Name of the Google Group to delete (e.g., "class-a-2023" or "class-a-2023@example.com")')
     
     # List command
     list_parser = subparsers.add_parser('list', help='List Google Groups in the domain')
@@ -283,8 +303,8 @@ def main():
     
     # Rename command
     rename_parser = subparsers.add_parser('rename', help='Rename an existing Google Group')
-    rename_parser.add_argument('old_group_name', help='Current name of the Google Group (what goes before @domain.com)')
-    rename_parser.add_argument('new_group_name', help='New name for the Google Group (what goes before @domain.com)')
+    rename_parser.add_argument('old_group_name', help='Current name of the Google Group (e.g., "class-a-2023" or "class-a-2023@example.com")')
+    rename_parser.add_argument('new_group_name', help='New name for the Google Group (e.g., "class-b-2023" or "class-b-2023@example.com")')
     
     args = parser.parse_args()
     
@@ -303,15 +323,20 @@ def main():
     
     if args.command == 'create':
         # Validate the group_name
-        if not validate_group_name(args.group_name):
+        is_valid, group_name, email_domain = validate_group_name(args.group_name)
+        if not is_valid:
             print("\nUSAGE EXAMPLE:")
             print(f"  ./groupmaker.py create class-a-2023 external.trainer@example.com")
+            print(f"  ./groupmaker.py create class-a-2023@example.com external.trainer@example.com")
             return
         
+        # Use domain from email if provided, otherwise use command line parameter or default
+        group_domain = email_domain or domain
+        
         # Create the Google Group
-        group_email = f"{args.group_name}@{domain}"
+        group_email = f"{group_name}@{group_domain}"
         print(f"Creating group: {group_email}...")
-        group = create_group(service, args.group_name, args.description, domain=domain)
+        group = create_group(service, group_name, args.description, domain=group_domain)
         
         if group:
             # Wait a moment for the group to propagate through Google's system
@@ -337,13 +362,18 @@ def main():
             
     elif args.command == 'delete':
         # Validate the group_name
-        if not validate_group_name(args.group_name):
+        is_valid, group_name, email_domain = validate_group_name(args.group_name)
+        if not is_valid:
             print("\nUSAGE EXAMPLE:")
             print(f"  ./groupmaker.py delete class-a-2023")
+            print(f"  ./groupmaker.py delete class-a-2023@example.com")
             return
         
+        # Use domain from email if provided, otherwise use command line parameter or default
+        group_domain = email_domain or domain
+        
         # Delete the Google Group
-        group_email = f"{args.group_name}@{domain}"
+        group_email = f"{group_name}@{group_domain}"
         delete_group(service, group_email)
     
     elif args.command == 'list':
@@ -351,14 +381,27 @@ def main():
         list_groups(service, domain=domain, query=args.query, max_results=args.max_results)
     
     elif args.command == 'rename':
-        # Validate both group names
-        if not validate_group_name(args.old_group_name) or not validate_group_name(args.new_group_name):
+        # Validate old group name
+        is_valid_old, old_group_name, old_email_domain = validate_group_name(args.old_group_name)
+        if not is_valid_old:
             print("\nUSAGE EXAMPLE:")
             print(f"  ./groupmaker.py rename old-group-name new-group-name")
+            print(f"  ./groupmaker.py rename old-group-name@example.com new-group-name")
+            return
+            
+        # Validate new group name
+        is_valid_new, new_group_name, new_email_domain = validate_group_name(args.new_group_name)
+        if not is_valid_new:
+            print("\nUSAGE EXAMPLE:")
+            print(f"  ./groupmaker.py rename old-group-name new-group-name")
+            print(f"  ./groupmaker.py rename old-group-name new-group-name@example.com")
             return
         
-        old_group_email = f"{args.old_group_name}@{domain}"
-        new_group_email = f"{args.new_group_name}@{domain}"
+        # Determine which domain to use (prioritize email domains)
+        group_domain = old_email_domain or new_email_domain or domain
+        
+        old_group_email = f"{old_group_name}@{group_domain}"
+        new_group_email = f"{new_group_name}@{group_domain}"
         
         # Check if old group exists
         if not ensure_group_exists(service, old_group_email):

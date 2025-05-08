@@ -30,6 +30,7 @@ This script automates the process of:
 2. Adding members to groups
 3. Listing existing groups with filtering options
 4. Deleting groups with confirmation
+5. Renaming existing Google Groups
 
 ## Requirements
 
@@ -154,6 +155,25 @@ Example:
 ./groupmaker.py delete python-class-feb2023
 ```
 
+### Renaming a Group
+
+```bash
+./groupmaker.py rename OLD_GROUP_NAME NEW_GROUP_NAME
+```
+
+This will rename an existing Google Group to a new name.
+
+**Expected Output:**
+```
+Successfully renamed group from old-name@tinkertanker.com to new-name@tinkertanker.com
+```
+
+Example:
+
+```bash
+./groupmaker.py rename python-class-feb2023 python-class-march2023
+```
+
 ### Getting Help
 
 ```bash
@@ -166,6 +186,7 @@ To get help for specific commands:
 ./groupmaker.py create --help
 ./groupmaker.py list --help
 ./groupmaker.py delete --help
+./groupmaker.py rename --help
 ```
 
 ## Configuration

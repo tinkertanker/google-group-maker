@@ -270,6 +270,11 @@ def main():
     list_parser.add_argument('--max-results', type=int, default=100, 
                       help='Maximum number of results to return per page (default: 100)')
     
+    # Rename command
+    rename_parser = subparsers.add_parser('rename', help='Rename an existing Google Group')
+    rename_parser.add_argument('old_group_name', help='Current name of the Google Group (what goes before @domain.com)')
+    rename_parser.add_argument('new_group_name', help='New name for the Google Group (what goes before @domain.com)')
+    
     args = parser.parse_args()
     
     # If no command is specified, show help
@@ -330,6 +335,42 @@ def main():
     elif args.command == 'list':
         # List Google Groups in the domain with optional filtering
         list_groups(service, domain=DOMAIN, query=args.query, max_results=args.max_results)
+    
+    elif args.command == 'rename':
+        # Validate both group names
+        if not validate_group_name(args.old_group_name) or not validate_group_name(args.new_group_name):
+            print("\nUSAGE EXAMPLE:")
+            print(f"  ./groupmaker.py rename old-group-name new-group-name")
+            return
+        
+        old_group_email = f"{args.old_group_name}@{DOMAIN}"
+        new_group_email = f"{args.new_group_name}@{DOMAIN}"
+        
+        # Check if old group exists
+        if not ensure_group_exists(service, old_group_email):
+            print(f"Error: Group {old_group_email} not found.")
+            return
+        
+        # Check if new group name already exists
+        if ensure_group_exists(service, new_group_email):
+            print(f"Error: Group {new_group_email} already exists.")
+            return
+        
+        # Get current group settings
+        try:
+            group = service.groups().get(groupKey=old_group_email).execute()
+            
+            # Update group settings
+            group['email'] = new_group_email
+            group['name'] = args.new_group_name
+            
+            # Update the group
+            service.groups().update(groupKey=old_group_email, body=group).execute()
+            print(f"Successfully renamed group from {old_group_email} to {new_group_email}")
+            
+        except Exception as e:
+            print(f"Error renaming group: {e}")
+            return
 
 if __name__ == "__main__":
     main()

@@ -18,6 +18,9 @@ chmod +x groupmaker.py
 # Create a new group with an external trainer
 ./groupmaker.py create python-class-feb2023 external_trainer@example.com
 
+# Create a group in a specific domain
+./groupmaker.py --domain example.org create python-class-feb2023 external_trainer@example.com
+
 # List all groups
 ./groupmaker.py list
 ```
@@ -191,10 +194,20 @@ To get help for specific commands:
 
 ## Configuration
 
-The script uses the following default values that can be configured using environment variables:
+The script uses the following default values that can be configured:
 
--   Domain: tinkertanker.com (can be set with `GOOGLE_GROUP_DOMAIN` environment variable)
+-   Domain: tinkertanker.com (can be set with `--domain` parameter or `GOOGLE_GROUP_DOMAIN` environment variable)
 -   Default admin email: yjsoon@tinkertanker.com (can be set with `ADMIN_EMAIL` environment variable)
+
+Example of using the domain parameter:
+
+```bash
+# Set domain for a single command
+./groupmaker.py --domain example.org create new-group trainer@example.com
+
+# Using the shorthand -d option
+./groupmaker.py -d example.org list
+```
 
 Example of using environment variables:
 
@@ -207,6 +220,8 @@ export GOOGLE_GROUP_DOMAIN=example.com
 export ADMIN_EMAIL=admin@example.com
 ./groupmaker.py create new-group trainer@example.com
 ```
+
+Note: The `--domain` parameter takes precedence over the `GOOGLE_GROUP_DOMAIN` environment variable.
 
 ## Troubleshooting
 

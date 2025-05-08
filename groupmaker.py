@@ -9,6 +9,13 @@ Requirements:
 - Python 3.6+
 - google-api-python-client, google-auth-httplib2, google-auth-oauthlib packages
 
+Usage examples:
+- Create a group: ./groupmaker.py create group-name trainer@example.com
+- Create a group in a specific domain: ./groupmaker.py --domain example.org create group-name trainer@example.com
+- List groups: ./groupmaker.py list
+- Rename a group: ./groupmaker.py rename old-name new-name
+- Delete a group: ./groupmaker.py delete group-name
+
 IMPORTANT: You need a service-account-credentials.json file to use this script.
            Check the company Notion documentation for instructions on obtaining this file.
            DO NOT commit this file to Git as it contains sensitive information.
@@ -79,9 +86,11 @@ def validate_group_name(group_name):
     
     return True
 
-def create_group(service, group_name, group_description=""):
+def create_group(service, group_name, group_description="", domain=None):
     """Create a new Google Group."""
-    email = f"{group_name}@{DOMAIN}"
+    # Use provided domain or default
+    domain_to_use = domain or DOMAIN
+    email = f"{group_name}@{domain_to_use}"
     
     group_body = {
         "email": email,
@@ -246,7 +255,9 @@ def list_groups(service, domain=DOMAIN, query=None, max_results=100):
 
 def main():
     # Set up command line arguments
-    parser = argparse.ArgumentParser(description='Create or delete a Google Group')
+    parser = argparse.ArgumentParser(description='Create, rename, list or delete Google Groups')
+    parser.add_argument('--domain', '-d', dest='domain',
+                        help=f'Domain for the Google Group (defaults to {DOMAIN})')
     subparsers = parser.add_subparsers(dest='command', help='Command to execute')
     
     # Create command
@@ -287,6 +298,9 @@ def main():
     if not service:
         return
     
+    # Use the domain from command line if specified, otherwise use default
+    domain = args.domain or DOMAIN
+    
     if args.command == 'create':
         # Validate the group_name
         if not validate_group_name(args.group_name):
@@ -295,9 +309,9 @@ def main():
             return
         
         # Create the Google Group
-        group_email = f"{args.group_name}@{DOMAIN}"
+        group_email = f"{args.group_name}@{domain}"
         print(f"Creating group: {group_email}...")
-        group = create_group(service, args.group_name, args.description)
+        group = create_group(service, args.group_name, args.description, domain=domain)
         
         if group:
             # Wait a moment for the group to propagate through Google's system
@@ -329,12 +343,12 @@ def main():
             return
         
         # Delete the Google Group
-        group_email = f"{args.group_name}@{DOMAIN}"
+        group_email = f"{args.group_name}@{domain}"
         delete_group(service, group_email)
     
     elif args.command == 'list':
         # List Google Groups in the domain with optional filtering
-        list_groups(service, domain=DOMAIN, query=args.query, max_results=args.max_results)
+        list_groups(service, domain=domain, query=args.query, max_results=args.max_results)
     
     elif args.command == 'rename':
         # Validate both group names
@@ -343,8 +357,8 @@ def main():
             print(f"  ./groupmaker.py rename old-group-name new-group-name")
             return
         
-        old_group_email = f"{args.old_group_name}@{DOMAIN}"
-        new_group_email = f"{args.new_group_name}@{DOMAIN}"
+        old_group_email = f"{args.old_group_name}@{domain}"
+        new_group_email = f"{args.new_group_name}@{domain}"
         
         # Check if old group exists
         if not ensure_group_exists(service, old_group_email):

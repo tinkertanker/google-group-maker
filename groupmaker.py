@@ -16,6 +16,8 @@ Usage examples:
 - List groups: ./groupmaker.py list
 - List members of a group: ./groupmaker.py members group-name
 - List members of a group (with domain): ./groupmaker.py members group-name@example.org
+- Add a member to a group: ./groupmaker.py add group-name new.member@example.com
+- Add a member as manager: ./groupmaker.py add group-name new.member@example.com --role MANAGER
 - Rename a group: ./groupmaker.py rename old-name new-name
 - Rename a group (specifying domain): ./groupmaker.py rename old-name@example.org new-name
 - Delete a group: ./groupmaker.py delete group-name
@@ -371,7 +373,14 @@ def main():
                           help='Include members from nested groups')
     members_parser.add_argument('--max-results', type=int, default=100,
                           help='Maximum number of results to return per page (default: 100)')
-    
+
+    # Add member command
+    add_parser = subparsers.add_parser('add', help='Add a member to a Google Group')
+    add_parser.add_argument('group_name', help='Name of the Google Group to add a member to (e.g., "class-a-2023" or "class-a-2023@example.com")')
+    add_parser.add_argument('member_email', help='Email address of the member to add')
+    add_parser.add_argument('--role', choices=['OWNER', 'MANAGER', 'MEMBER'], default='MEMBER',
+                      help='Role to assign to the member (default: MEMBER)')
+
     # Rename command
     rename_parser = subparsers.add_parser('rename', help='Rename an existing Google Group')
     rename_parser.add_argument('old_group_name', help='Current name of the Google Group (e.g., "class-a-2023" or "class-a-2023@example.com")')
@@ -467,6 +476,30 @@ def main():
         group_email = f"{group_name}@{group_domain}"
         list_members(service, group_email, include_derived_membership=args.include_derived, max_results=args.max_results)
     
+    elif args.command == 'add':
+        # Validate the group_name
+        is_valid, group_name, email_domain = validate_group_name(args.group_name)
+        if not is_valid:
+            print("\nUSAGE EXAMPLE:")
+            print(f"  ./groupmaker.py add class-a-2023 new.member@example.com")
+            print(f"  ./groupmaker.py add class-a-2023@example.com new.member@example.com")
+            print(f"  ./groupmaker.py add class-a-2023 new.member@example.com --role MANAGER")
+            return
+
+        # Use domain from email if provided, otherwise use command line parameter or default
+        group_domain = email_domain or domain
+
+        # Add member to the Google Group
+        group_email = f"{group_name}@{group_domain}"
+
+        # Verify the group exists before proceeding
+        if not ensure_group_exists(service, group_email):
+            print(f"Error: Group {group_email} not found or cannot be accessed.")
+            return
+
+        # Add the member
+        add_member(service, group_email, args.member_email, role=args.role)
+
     elif args.command == 'rename':
         # Validate old group name
         is_valid_old, old_group_name, old_email_domain = validate_group_name(args.old_group_name)

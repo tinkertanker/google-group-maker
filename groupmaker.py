@@ -14,6 +14,8 @@ Usage examples:
 - Create a group in a specific domain: ./groupmaker.py --domain example.org create group-name trainer@example.com
 - Create a group (specifying domain in group name): ./groupmaker.py create group-name@example.org trainer@example.com
 - List groups: ./groupmaker.py list
+- List members of a group: ./groupmaker.py members group-name
+- List members of a group (with domain): ./groupmaker.py members group-name@example.org
 - Rename a group: ./groupmaker.py rename old-name new-name
 - Rename a group (specifying domain): ./groupmaker.py rename old-name@example.org new-name
 - Delete a group: ./groupmaker.py delete group-name
@@ -273,6 +275,67 @@ def list_groups(service, domain=DOMAIN, query=None, max_results=100):
         print(f"Error listing groups: {e}")
         return []
 
+def list_members(service, group_email, include_derived_membership=False, max_results=100):
+    """List members of a Google Group with optional parameters."""
+    members = []
+    page_token = None
+    
+    print(f"Fetching members for group: {group_email}...")
+    
+    try:
+        while True:
+            # Prepare request parameters
+            params = {
+                'groupKey': group_email,
+                'maxResults': max_results,
+                'includeDerivedMembership': include_derived_membership
+            }
+            
+            # Add page token if we're on subsequent pages
+            if page_token:
+                params['pageToken'] = page_token
+            
+            # Execute the API request to list members
+            results = service.members().list(**params).execute()
+            
+            # Add members from this page to our collection
+            if 'members' in results:
+                members.extend(results['members'])
+                
+            # Check if there are more pages
+            page_token = results.get('nextPageToken')
+            if not page_token:
+                break
+        
+        # Print results in a formatted way
+        if members:
+            separator_line = "-" * 120
+            print(f"\nFound {len(members)} members in {group_email}:")
+            print(separator_line)
+            print(f"{'EMAIL ADDRESS':<40} {'ROLE':<15} {'TYPE':<15} {'STATUS'}")
+            print(separator_line)
+            
+            for member in members:
+                email = member.get('email', 'N/A')
+                role = member.get('role', 'N/A')
+                member_type = member.get('type', 'N/A')
+                status = member.get('status', 'N/A')
+                
+                # Highlight derived members if they're included
+                derived = member.get('isDerivedMembership', False)
+                if derived:
+                    email = f"{email} (nested)"
+                    
+                print(f"{email:<40} {role:<15} {member_type:<15} {status}")
+        else:
+            print("No members found in this group.")
+            
+        return members
+            
+    except Exception as e:
+        print(f"Error listing members: {e}")
+        return []
+
 def main():
     # Set up command line arguments
     parser = argparse.ArgumentParser(description='Create, rename, list or delete Google Groups')
@@ -300,6 +363,14 @@ def main():
     list_parser.add_argument('--query', help='Search query to filter groups (e.g., "class" to find all class groups)')
     list_parser.add_argument('--max-results', type=int, default=100, 
                       help='Maximum number of results to return per page (default: 100)')
+    
+    # Members command
+    members_parser = subparsers.add_parser('members', help='List members of a Google Group')
+    members_parser.add_argument('group_name', help='Name of the Google Group to list members from (e.g., "class-a-2023" or "class-a-2023@example.com")')
+    members_parser.add_argument('--include-derived', action='store_true',
+                          help='Include members from nested groups')
+    members_parser.add_argument('--max-results', type=int, default=100,
+                          help='Maximum number of results to return per page (default: 100)')
     
     # Rename command
     rename_parser = subparsers.add_parser('rename', help='Rename an existing Google Group')
@@ -379,6 +450,22 @@ def main():
     elif args.command == 'list':
         # List Google Groups in the domain with optional filtering
         list_groups(service, domain=domain, query=args.query, max_results=args.max_results)
+    
+    elif args.command == 'members':
+        # Validate the group_name
+        is_valid, group_name, email_domain = validate_group_name(args.group_name)
+        if not is_valid:
+            print("\nUSAGE EXAMPLE:")
+            print(f"  ./groupmaker.py members class-a-2023")
+            print(f"  ./groupmaker.py members class-a-2023@example.com")
+            return
+        
+        # Use domain from email if provided, otherwise use command line parameter or default
+        group_domain = email_domain or domain
+        
+        # List members of the Google Group
+        group_email = f"{group_name}@{group_domain}"
+        list_members(service, group_email, include_derived_membership=args.include_derived, max_results=args.max_results)
     
     elif args.command == 'rename':
         # Validate old group name

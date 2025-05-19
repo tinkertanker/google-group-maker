@@ -125,13 +125,12 @@ This will display all Google Groups in your domain in a formatted table.
 
 **Expected Output:**
 ```
-+--------------------------------+-----------------------------+-------------------------------+
-| Group Email                    | Name                        | Description                   |
-+--------------------------------+-----------------------------+-------------------------------+
-| python-class-feb2023@...com    | python-class-feb2023        | Python class February 2023    |
-| java-workshop-apr2023@...com   | java-workshop-apr2023       | Java workshop April 2023      |
-+--------------------------------+-----------------------------+-------------------------------+
-Total groups: 2
+Found 23 groups:
+------------------------------------------------------------------------------------------------------------------------
+EMAIL ADDRESS                            NAME                          DESCRIPTION
+------------------------------------------------------------------------------------------------------------------------
+python-class-feb2023@tinkertanker.com    python-class-feb2023          Python class February 2023    
+java-workshop-apr2023@tinkertanker.com   java-workshop-apr2023         Java workshop April 2023      
 ```
 
 **Options:**
@@ -146,6 +145,49 @@ Example:
 
 # List groups with "class" in their name, email or description
 ./groupmaker.py list --query class
+```
+
+### Listing Group Members
+
+```bash
+./groupmaker.py members GROUP_NAME [options]
+```
+
+This will display all members of a specific Google Group with detailed information.
+
+**Expected Output:**
+```
+Found 5 members in python-class-feb2023@tinkertanker.com:
+--------------------------------------------------------------------------------------------------------------------------------------------
+EMAIL ADDRESS                                 NAME                      ROLE            TYPE       STATUS
+--------------------------------------------------------------------------------------------------------------------------------------------
+yjsoon@tinkertanker.com                      Yjsoon                    👑 OWNER        USER       ACTIVE
+trainer@example.com                          Trainer                   ⭐ MANAGER      USER       ACTIVE
+alice.johnson@tinkertanker.com               Alice Johnson             MEMBER          USER       ACTIVE
+bob.smith@tinkertanker.com                   Bob Smith                 MEMBER          USER       ACTIVE
+charlie.chen@tinkertanker.com                Charlie Chen              MEMBER          USER       ACTIVE
+--------------------------------------------------------------------------------------------------------------------------------------------
+Summary: 1 owners, 1 managers, 3 members
+```
+
+**Features:**
+- Members are sorted by role (owners first, then managers, then regular members)
+- Names are extracted and displayed for better identification
+- Visual markers (👑 for owners, ⭐ for managers) help identify roles at a glance
+- Summary shows total count by role
+
+**Options:**
+-   `--include-derived`: Include members from nested groups
+-   `--max-results NUMBER`: Maximum number of results to return per page (default: 100)
+
+Example:
+
+```bash
+# List members of a group
+./groupmaker.py members python-class-feb2023
+
+# Include nested group members
+./groupmaker.py members python-class-feb2023 --include-derived
 ```
 
 ### Deleting a Group

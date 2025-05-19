@@ -309,12 +309,16 @@ def list_members(service, group_email, include_derived_membership=False, max_res
             if not page_token:
                 break
         
+        # Sort members by role (OWNER first, then MANAGER, then MEMBER)
+        role_order = {'OWNER': 0, 'MANAGER': 1, 'MEMBER': 2}
+        members.sort(key=lambda m: (role_order.get(m.get('role', 'MEMBER'), 3), m.get('email', '')))
+        
         # Print results in a formatted way
         if members:
-            separator_line = "-" * 120
+            separator_line = "-" * 140
             print(f"\nFound {len(members)} members in {group_email}:")
             print(separator_line)
-            print(f"{'EMAIL ADDRESS':<40} {'ROLE':<15} {'TYPE':<15} {'STATUS'}")
+            print(f"{'EMAIL ADDRESS':<45} {'NAME':<25} {'ROLE':<15} {'TYPE':<10} {'STATUS'}")
             print(separator_line)
             
             for member in members:
@@ -323,12 +327,35 @@ def list_members(service, group_email, include_derived_membership=False, max_res
                 member_type = member.get('type', 'N/A')
                 status = member.get('status', 'N/A')
                 
+                # Extract name if available (try to get from email if not provided separately)
+                name = member.get('name', '')
+                if not name and '@' in email:
+                    # Extract name part from email address
+                    name_part = email.split('@')[0]
+                    # Replace dots and dashes with spaces for better readability
+                    name = name_part.replace('.', ' ').replace('-', ' ').title()
+                
                 # Highlight derived members if they're included
                 derived = member.get('isDerivedMembership', False)
                 if derived:
                     email = f"{email} (nested)"
+                
+                # Highlight different roles with markers
+                role_marker = ''
+                if role == 'OWNER':
+                    role_marker = '👑 '
+                elif role == 'MANAGER':
+                    role_marker = '⭐ '
                     
-                print(f"{email:<40} {role:<15} {member_type:<15} {status}")
+                print(f"{email:<45} {name:<25} {role_marker}{role:<13} {member_type:<10} {status}")
+            
+            # Print summary
+            print(separator_line)
+            owners = sum(1 for m in members if m.get('role') == 'OWNER')
+            managers = sum(1 for m in members if m.get('role') == 'MANAGER')
+            regular_members = sum(1 for m in members if m.get('role') == 'MEMBER')
+            print(f"Summary: {owners} owners, {managers} managers, {regular_members} members")
+            
         else:
             print("No members found in this group.")
             

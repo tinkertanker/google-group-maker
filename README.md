@@ -183,11 +183,17 @@ Summary: 1 owners, 1 managers, 3 members
 Example:
 
 ```bash
-# List members of a group
+# List members of a group (the command is 'members', not 'list_members')
 ./groupmaker.py members python-class-feb2023
+
+# You can use partial group names - the script will add the domain
+./groupmaker.py members trainer.brandon
 
 # Include nested group members
 ./groupmaker.py members python-class-feb2023 --include-derived
+
+# Specify full email if needed
+./groupmaker.py members trainer.brandon@tinkertanker.com
 ```
 
 ### Deleting a Group

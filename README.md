@@ -73,9 +73,11 @@ This script automates the process of:
     You can set default values using environment variables or a `.env` file:
     ```
     GOOGLE_GROUP_DOMAIN=yourdomain.com
+    DEFAULT_EMAIL=your-email@yourdomain.com
     ADMIN_EMAIL=admin@yourdomain.com
     ```
     
+    **IMPORTANT:** The `DEFAULT_EMAIL` environment variable is required. This replaces the hardcoded default email.
     Create a `.env` file in the same directory as the script to automatically load these settings.
 
 ## Usage

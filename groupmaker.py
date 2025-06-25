@@ -45,7 +45,16 @@ except ImportError:
 
 # Constants - configure with environment variables or use defaults
 DOMAIN = os.environ.get("GOOGLE_GROUP_DOMAIN", "tinkertanker.com")
-DEFAULT_ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "yjsoon@tinkertanker.com")
+DEFAULT_EMAIL = os.environ.get("DEFAULT_EMAIL")
+
+# Validate that DEFAULT_EMAIL is set
+if not DEFAULT_EMAIL:
+    print("ERROR: DEFAULT_EMAIL environment variable is required.")
+    print("Please set DEFAULT_EMAIL in your .env file or environment.")
+    print("Example: DEFAULT_EMAIL=your-email@tinkertanker.com")
+    sys.exit(1)
+
+DEFAULT_ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", DEFAULT_EMAIL)
 
 def create_service():
     """Create and return an authorized service object for the Google Directory API."""

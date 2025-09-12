@@ -3,13 +3,13 @@ Create Group page for Google Group Maker Streamlit app.
 """
 
 import streamlit as st
-from typing import Optional
+from typing import Optional, List
 
 from config_utils import get_env
 from streamlit_utils.state_manager import StateManager
 from streamlit_utils.config import SUCCESS_MESSAGES, ERROR_MESSAGES
 from streamlit_components.common import (
-    run_with_spinner, show_success, show_error, 
+    run_with_spinner, show_success, show_error, show_info,
     format_group_email, domain_input
 )
 from web_utils import GroupMakerAPI
@@ -57,11 +57,27 @@ def render_create_group(api: GroupMakerAPI) -> None:
                 help="Letters, numbers, hyphens, underscores, and periods only"
             )
             
-            trainer_email = st.text_input(
-                "Trainer Email *",
-                placeholder="trainer@example.com",
-                help="Email of the external trainer to add to the group"
+            # New: Support multiple trainer emails
+            st.markdown("**Trainer Emails** *")
+            num_trainers = st.number_input(
+                "Number of trainers to add",
+                min_value=1,
+                max_value=10,
+                value=1,
+                step=1,
+                help="How many trainer emails would you like to add?"
             )
+            
+            trainer_emails = []
+            for i in range(int(num_trainers)):
+                email = st.text_input(
+                    f"Trainer {i+1} Email",
+                    placeholder="trainer@example.com",
+                    key=f"trainer_email_{i}",
+                    help="Email of the external trainer to add to the group"
+                )
+                if email:
+                    trainer_emails.append(email)
         
         with col2:
             env = get_env()
@@ -75,6 +91,12 @@ def render_create_group(api: GroupMakerAPI) -> None:
                 placeholder="Brief description of the group",
                 max_chars=500
             )
+            
+            # Show preview of trainers to be added
+            if trainer_emails:
+                st.markdown("**Trainers to be added:**")
+                for email in trainer_emails:
+                    st.write(f"• {email}")
         
         # Options section
         st.subheader("Options")
@@ -88,14 +110,14 @@ def render_create_group(api: GroupMakerAPI) -> None:
         
         if submitted:
             _handle_create_group(
-                api, group_name, trainer_email, 
+                api, group_name, trainer_emails, 
                 domain, description, skip_self
             )
 
 
 def _handle_create_group(api: GroupMakerAPI, 
                         group_name: str,
-                        trainer_email: str,
+                        trainer_emails: List[str],
                         domain: str,
                         description: str,
                         skip_self: bool) -> None:
@@ -104,7 +126,7 @@ def _handle_create_group(api: GroupMakerAPI,
     Args:
         api: GroupMakerAPI instance
         group_name: Name of the group
-        trainer_email: Trainer's email
+        trainer_emails: List of trainer emails
         domain: Domain for the group
         description: Group description
         skip_self: Whether to skip adding self
@@ -119,8 +141,13 @@ def _handle_create_group(api: GroupMakerAPI,
         if not is_valid:
             errors.append(error_msg)
     
-    if not trainer_email or "@" not in trainer_email:
-        errors.append(ERROR_MESSAGES["trainer_email_required"])
+    if not trainer_emails:
+        errors.append("At least one trainer email is required")
+    else:
+        # Validate all trainer emails
+        for email in trainer_emails:
+            if not email or "@" not in email:
+                errors.append(f"Invalid email address: {email}")
     
     if not domain:
         errors.append(ERROR_MESSAGES["domain_required"])
@@ -130,20 +157,44 @@ def _handle_create_group(api: GroupMakerAPI,
             st.error(error)
         return
     
-    # Create the group
+    # Create the group with the first trainer
     group_email = format_group_email(group_name, domain)
     
+    # Create group with first trainer
     result = run_with_spinner(
         api.create_group,
         f"Creating group {group_email}...",
         group_name,
-        trainer_email,
+        trainer_emails[0],  # Use first trainer for creation
         domain,
         description,
         skip_self
     )
     
     if result:
+        # Add remaining trainers if any
+        if len(trainer_emails) > 1:
+            show_info(f"Adding {len(trainer_emails) - 1} additional trainers...")
+            
+            success_count = 0
+            failed_emails = []
+            
+            for trainer_email in trainer_emails[1:]:
+                try:
+                    # Add each additional trainer as a member
+                    api.add_member(group_email, trainer_email, "MEMBER")
+                    success_count += 1
+                except Exception as e:
+                    failed_emails.append(f"{trainer_email}: {str(e)}")
+            
+            if success_count > 0:
+                show_success(f"Added {success_count} additional trainers successfully")
+            
+            if failed_emails:
+                st.warning("Some trainers could not be added:")
+                for error in failed_emails:
+                    st.write(f"• {error}")
+        
         StateManager.clear_caches()
         
         # Store success state and rerun to show success message and buttons

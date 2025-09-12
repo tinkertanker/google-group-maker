@@ -210,10 +210,22 @@ def page_create_group():
             )
         
         st.subheader("Options")
-        skip_self = st.checkbox(
-            "Skip adding myself to the group",
-            help="Don't automatically add your email as a member"
-        )
+        
+        # Get admin email from environment
+        env = get_env()
+        admin_email = env.get("ADMIN_EMAIL", env.get("DEFAULT_EMAIL"))
+        
+        # Show checkbox only if admin email is configured
+        if admin_email:
+            add_admin = st.checkbox(
+                f"Add admin to the group ({admin_email})",
+                value=True,  # Checked by default
+                help="Add the admin email configured in settings as a group member"
+            )
+            skip_self = not add_admin  # Invert for the API
+        else:
+            st.info("ℹ️ No admin email configured. Set ADMIN_EMAIL or DEFAULT_EMAIL in Settings to auto-add yourself to groups.")
+            skip_self = True  # Always skip if no admin email
         
         submitted = st.form_submit_button("🚀 Create Group", use_container_width=True)
         

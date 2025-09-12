@@ -4,6 +4,27 @@ A command-line utility for automating the creation and management of Google Grou
 
 ## Quick Start
 
+### Web Interface (Streamlit)
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Set up environment variables
+echo "DEFAULT_EMAIL=your-email@example.com" > .env
+
+# Set up service account credentials
+cp service-account-credentials.example.json service-account-credentials.json
+# Edit service-account-credentials.json with your actual credentials
+
+# Run the web interface
+streamlit run streamlit_app.py
+```
+
+The web interface provides an intuitive way to manage Google Groups with all the same functionality as the CLI.
+
+### Command Line Interface
+
 ```bash
 # Install dependencies
 pip install -r requirements.txt
@@ -30,13 +51,15 @@ chmod +x groupmaker.py
 
 ## Overview
 
-This script automates the process of:
+This tool automates the process of:
 
-1. Creating new Google Groups in your organization
+1. Creating new Google Groups in your organisation
 2. Adding members to groups
 3. Listing existing groups with filtering options
 4. Deleting groups with confirmation
 5. Renaming existing Google Groups
+
+Available as both a command-line tool and a web interface (Streamlit).
 
 ## Requirements
 

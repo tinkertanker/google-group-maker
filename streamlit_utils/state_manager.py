@@ -154,7 +154,6 @@ class StateManager:
         
         # Ensure state is persisted before rerun
         # Force a small delay to ensure state persistence
-        import time
         time.sleep(0.01)  # Minimal delay to ensure state write
         
         st.rerun()

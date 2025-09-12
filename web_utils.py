@@ -47,7 +47,7 @@ class GroupMakerAPI:
         for arg in args:
             if not isinstance(arg, str):
                 arg = str(arg)
-            # Use shlex.quote for all arguments to ensure safety
+            # Convert all arguments to strings for safety
             validated_args.append(arg)
         
         cmd = [sys.executable, "./groupmaker.py"] + validated_args

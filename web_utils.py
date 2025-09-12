@@ -20,13 +20,15 @@ logger = logging.getLogger(__name__)
 class GroupMakerAPI:
     """API wrapper for Google Group Maker functionality with security enhancements."""
     
-    def __init__(self, debug: bool = False):
+    def __init__(self, debug: bool = False, timeout: int = 60):
         """Initialize the API wrapper.
         
         Args:
             debug: Enable debug logging
+            timeout: Default timeout in seconds for CLI commands
         """
         self.debug = debug
+        self.default_timeout = int(os.environ.get('CLI_TIMEOUT', timeout))
         if debug:
             logging.basicConfig(level=logging.DEBUG)
     
@@ -275,25 +277,36 @@ class GroupMakerAPI:
         if not is_valid:
             raise ValueError(error_msg)
         
-        cmd = [sys.executable, "./groupmaker.py", "delete", group_name]
+        # Use the safe _run_cli method with proper input handling
+        args = ["delete", group_name, "--yes"]  # Use --yes flag if available
         
-        try:
-            proc = subprocess.run(
-                cmd, 
-                input="yes\n", 
-                text=True, 
-                capture_output=True, 
-                timeout=60,
-                check=False,
-                env={**os.environ, 'PYTHONDONTWRITEBYTECODE': '1'}
-            )
-            success = proc.returncode == 0
-            stdout = proc.stdout
-            stderr = proc.stderr
-        except subprocess.TimeoutExpired:
-            raise RuntimeError("Command timed out after 60 seconds")
-        except Exception as e:
-            raise RuntimeError(str(e))
+        # First try with --yes flag
+        success, stdout, stderr = self._run_cli(args)
+        
+        if not success and "unrecognized arguments: --yes" in stderr:
+            # Fallback to interactive mode with yes input
+            cmd = [sys.executable, "./groupmaker.py", "delete", group_name]
+            
+            try:
+                # Use subprocess with proper safety measures
+                proc = subprocess.run(
+                    cmd, 
+                    input="yes\n", 
+                    text=True, 
+                    capture_output=True, 
+                    timeout=self.default_timeout,
+                    check=False,
+                    env={**os.environ, 'PYTHONDONTWRITEBYTECODE': '1'},
+                    cwd=None,  # Explicitly set working directory
+                    shell=False  # Never use shell=True
+                )
+                success = proc.returncode == 0
+                stdout = proc.stdout
+                stderr = proc.stderr
+            except subprocess.TimeoutExpired:
+                raise RuntimeError(f"Command timed out after {self.default_timeout} seconds")
+            except Exception as e:
+                raise RuntimeError(str(e))
         
         if not success:
             raise RuntimeError(stderr or stdout or "Failed to delete group")
@@ -458,13 +471,25 @@ class GroupMakerAPI:
         if not group_name:
             return False, "Group name is required"
         
-        # Check for valid characters (letters, numbers, hyphens, underscores, periods)
-        if not re.match(r'^[a-zA-Z0-9.\-_@]+$', group_name):
-            return False, "Group name can only contain letters, numbers, periods, hyphens, underscores, and @ symbol"
+        # If it contains @, it should be a full email - validate differently
+        if "@" in group_name:
+            # This is a full email address, validate as email
+            if cls._validate_email(group_name):
+                return True, ""
+            else:
+                return False, "Invalid email format for group"
+        
+        # For group names (without @), only allow safe characters
+        if not re.match(r'^[a-zA-Z0-9.\-_]+$', group_name):
+            return False, "Group name can only contain letters, numbers, periods, hyphens, and underscores"
         
         # Check length
         if len(group_name) > 100:
             return False, "Group name must be less than 100 characters"
+        
+        # Check it doesn't start or end with special characters
+        if group_name[0] in '.-_' or group_name[-1] in '.-_':
+            return False, "Group name cannot start or end with special characters"
         
         return True, ""
     

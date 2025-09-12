@@ -43,7 +43,41 @@ def credentials_exist():
     return get_credentials_path().exists()
 
 def save_credentials_file(bytes_data):
-    """Save service account credentials to the standard location."""
+    """Save service account credentials to the standard location.
+    
+    Args:
+        bytes_data: Raw bytes of the credentials file
+        
+    Returns:
+        Path to the saved file
+        
+    Raises:
+        ValueError: If credentials are invalid
+    """
+    import json
+    
+    # Validate JSON structure
+    try:
+        creds = json.loads(bytes_data)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON format: {e}")
+    
+    # Check for required fields in service account JSON
+    required_fields = ['type', 'project_id', 'private_key', 'client_email']
+    missing_fields = [field for field in required_fields if field not in creds]
+    
+    if missing_fields:
+        raise ValueError(f"Missing required fields in credentials: {', '.join(missing_fields)}")
+    
+    # Validate type field
+    if creds.get('type') != 'service_account':
+        raise ValueError(f"Invalid credentials type: {creds.get('type')}. Expected 'service_account'")
+    
+    # Validate private key format
+    if not creds.get('private_key', '').startswith('-----BEGIN'):
+        raise ValueError("Invalid private key format")
+    
+    # Save the validated credentials
     path = get_credentials_path()
     path.write_bytes(bytes_data)
     return path

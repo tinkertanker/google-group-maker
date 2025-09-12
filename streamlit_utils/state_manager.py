@@ -151,4 +151,10 @@ class StateManager:
         """
         # Use a different key for navigation to avoid conflict with radio widget
         cls.set("next_page", page)
+        
+        # Ensure state is persisted before rerun
+        # Force a small delay to ensure state persistence
+        import time
+        time.sleep(0.01)  # Minimal delay to ensure state write
+        
         st.rerun()

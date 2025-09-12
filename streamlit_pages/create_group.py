@@ -26,19 +26,30 @@ def render_create_group(api: GroupMakerAPI) -> None:
     # Check if we just created a group (using session state)
     if StateManager.get("create_success"):
         group_created = StateManager.get("created_group_email", "")
-        show_success(SUCCESS_MESSAGES["group_created"].format(group_email=group_created))
+        partial_success = StateManager.get("partial_success", False)
+        
+        if partial_success:
+            show_success(f"✅ Group created: {group_created}")
+            st.warning("⚠️ Some trainers could not be added. You can retry from the 'Add Members' page.")
+        else:
+            show_success(SUCCESS_MESSAGES["group_created"].format(group_email=group_created))
         
         # Clear the success flag
         StateManager.set("create_success", False)
         StateManager.set("created_group_email", None)
+        StateManager.set("partial_success", False)
         
         # Show navigation buttons (outside form!)
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         with col1:
             if st.button("👥 View Group Members", use_container_width=True):
                 StateManager.set_selected_group(group_created)
                 StateManager.navigate_to("👥 Group Members")
         with col2:
+            if partial_success and st.button("👤 Add Failed Members", use_container_width=True):
+                StateManager.set_selected_group(group_created)
+                StateManager.navigate_to("👤 Add Members")
+        with col3:
             if st.button("➕ Create Another Group", use_container_width=True):
                 st.rerun()
         
@@ -172,32 +183,50 @@ def _handle_create_group(api: GroupMakerAPI,
     )
     
     if result:
+        # Track overall success
+        group_created_successfully = True
+        all_trainers_added = True
+        
         # Add remaining trainers if any
         if len(trainer_emails) > 1:
             show_info(f"Adding {len(trainer_emails) - 1} additional trainers...")
             
             success_count = 0
             failed_emails = []
+            added_emails = []  # Track successfully added emails for potential rollback
             
             for trainer_email in trainer_emails[1:]:
                 try:
                     # Add each additional trainer as a member
                     api.add_member(group_email, trainer_email, "MEMBER")
                     success_count += 1
+                    added_emails.append(trainer_email)
                 except Exception as e:
                     failed_emails.append(f"{trainer_email}: {str(e)}")
+                    all_trainers_added = False
             
             if success_count > 0:
                 show_success(f"Added {success_count} additional trainers successfully")
             
             if failed_emails:
-                st.warning("Some trainers could not be added:")
+                st.warning("⚠️ Some trainers could not be added:")
                 for error in failed_emails:
                     st.write(f"• {error}")
+                
+                # Store failed emails in session state for retry
+                StateManager.set("failed_trainer_emails", [email.split(":")[0].strip() for email in failed_emails])
+                StateManager.set("retry_group_email", group_email)
+                
+                # Offer retry option
+                st.info("💡 You can retry adding the failed trainers from the 'Add Members' page")
         
         StateManager.clear_caches()
         
         # Store success state and rerun to show success message and buttons
         StateManager.set("create_success", True)
         StateManager.set("created_group_email", group_email)
+        StateManager.set("partial_success", not all_trainers_added)
         st.rerun()
+    else:
+        # Group creation failed - no rollback needed as nothing was created
+        show_error("Failed to create group. Please check your settings and try again.")

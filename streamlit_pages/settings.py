@@ -97,16 +97,33 @@ def _render_credentials_settings() -> None:
     
     if uploaded_file:
         try:
-            # Validate it's JSON
-            json.loads(uploaded_file.getvalue().decode())
+            # Validate and show save button
+            file_contents = uploaded_file.getvalue()
             
-            if st.button("💾 Save Credentials File"):
-                save_credentials_file(uploaded_file.getvalue())
-                show_success(SUCCESS_MESSAGES["credentials_saved"])
-                st.rerun()
+            # Try to parse and validate
+            try:
+                json_data = json.loads(file_contents.decode())
                 
-        except json.JSONDecodeError:
-            st.error(ERROR_MESSAGES["invalid_json"])
+                # Show preview of credentials (safe fields only)
+                st.success("✅ Valid JSON detected")
+                with st.expander("Preview credentials (safe fields)"):
+                    st.write(f"**Type**: {json_data.get('type', 'N/A')}")
+                    st.write(f"**Project ID**: {json_data.get('project_id', 'N/A')}")
+                    st.write(f"**Client Email**: {json_data.get('client_email', 'N/A')}")
+                
+                if st.button("💾 Save Credentials File"):
+                    try:
+                        save_credentials_file(file_contents)
+                        show_success(SUCCESS_MESSAGES["credentials_saved"])
+                        st.rerun()
+                    except ValueError as e:
+                        show_error(f"Invalid credentials: {e}")
+                        
+            except json.JSONDecodeError as e:
+                st.error(f"{ERROR_MESSAGES['invalid_json']}: {e}")
+                
+        except Exception as e:
+            st.error(f"Error processing file: {e}")
     
     st.warning(CREDENTIALS_WARNING)
 

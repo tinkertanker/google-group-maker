@@ -1,12 +1,22 @@
 # Google Group Maker - Claude Development Guide
 
 ## Project Overview
-Google Group Maker is a command-line utility for automating the creation and management of Google Groups using the Google Admin SDK API.
+Google Group Maker is a tool for automating the creation and management of Google Groups using the Google Admin SDK API. Available as both CLI and web interface.
 
 ## Key Components
-- **groupmaker.py**: Main script containing all functionality
+
+### Core Files
+- **groupmaker.py**: Main CLI script containing all functionality
+- **streamlit_app.py**: Web interface (refactored modular version)
 - **service-account-credentials.json**: Service account credentials (not in git)
 - **requirements.txt**: Python dependencies
+
+### Web Interface Structure
+- **streamlit_pages/**: Individual page modules (dashboard, create_group, list_groups, etc.)
+- **streamlit_components/**: Reusable UI components
+- **streamlit_utils/**: Utilities (state management, caching, error handling, config)
+- **web_utils.py**: API wrapper with security enhancements
+- **config_utils.py**: Configuration and credentials management
 
 ## Available Commands
 1. `create` - Create a new Google Group and add members
@@ -59,3 +69,31 @@ Optional:
 - Include proper error handling with helpful messages
 - Add debug logging with --debug flag
 - Follow PEP 8 guidelines
+
+## Recent Improvements (Streamlit Frontend)
+
+### Security Enhancements
+- Fixed command injection vulnerabilities in subprocess execution
+- Strengthened input validation for group names
+- Added comprehensive credentials file validation
+- Implemented secure command execution throughout
+
+### Architecture
+- Refactored monolithic 800+ line file into modular components
+- Implemented centralized state management (StateManager)
+- Added proper Streamlit caching with `@st.cache_data`
+- Created reusable UI components
+
+### Features Added
+- Web interface with all CLI functionality
+- Support for multiple trainer emails in group creation
+- Group actions available from members detail page
+- Inline delete confirmation for better UX
+- Better admin email handling with transparent display
+- Partial success handling for batch operations
+
+### Fixes Applied
+- Fixed navigation issues with Streamlit widget keys
+- Resolved button-in-form errors
+- Fixed race conditions in state management
+- Made timeouts configurable via environment variables

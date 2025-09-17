@@ -7,12 +7,9 @@ Provides a clean Python API for web UI operations with enhanced security.
 import re
 import subprocess
 import sys
-import time
 import shlex
 import os
 from typing import List, Dict, Optional, Any, Tuple
-import json
-from pathlib import Path
 import logging
 
 logger = logging.getLogger(__name__)
@@ -260,6 +257,119 @@ class GroupMakerAPI:
             "new_name": new_group_name
         }
     
+    def remove_member(self, group_name: str, member_email: str) -> Dict[str, Any]:
+        """Remove a member from a Google Group.
+
+        Args:
+            group_name: Name or email of the group
+            member_email: Email of the member to remove
+
+        Returns:
+            Dict with success status and message
+
+        Raises:
+            RuntimeError: If removal fails
+        """
+        # Validate inputs to prevent injection
+        is_valid_group, error_msg = self.validate_group_name(group_name)
+        if not is_valid_group:
+            raise ValueError(f"Invalid group name: {error_msg}")
+
+        is_valid_email, error_msg = self.validate_email(member_email)
+        if not is_valid_email:
+            raise ValueError(f"Invalid member email: {error_msg}")
+
+        args = ["remove", group_name, member_email]
+
+        success, stdout, stderr = self._run_cli(args)
+
+        if not success:
+            error_message = stderr or stdout or "Failed to remove member"
+            # Handle specific error cases
+            if "is not a member of" in error_message:
+                return {
+                    "success": False,
+                    "message": f"{member_email} is not a member of {group_name}"
+                }
+            elif "not found" in error_message.lower():
+                return {
+                    "success": False,
+                    "message": f"Group {group_name} not found"
+                }
+            # For other errors, raise exception to be handled by caller
+            raise RuntimeError(error_message)
+
+        return {
+            "success": True,
+            "message": f"Successfully removed {member_email} from {group_name}",
+            "member_email": member_email,
+            "group_name": group_name
+        }
+
+    def remove_members_batch(self, group_name: str, member_emails: List[str]) -> Dict[str, Any]:
+        """Remove multiple members from a Google Group.
+
+        Args:
+            group_name: Name or email of the group
+            member_emails: List of member emails to remove
+
+        Returns:
+            Dict with results for each member and overall summary
+
+        Raises:
+            ValueError: If inputs are invalid
+        """
+        # Validate inputs
+        if not member_emails:
+            raise ValueError("No member emails provided")
+
+        # Validate group name
+        is_valid_group, error_msg = self.validate_group_name(group_name)
+        if not is_valid_group:
+            raise ValueError(f"Invalid group name: {error_msg}")
+
+        results = []
+        successful_removals = []
+        failed_removals = []
+
+        for member_email in member_emails:
+            try:
+                result = self.remove_member(group_name, member_email)
+                if result.get("success"):
+                    successful_removals.append(member_email)
+                    results.append({
+                        "email": member_email,
+                        "success": True,
+                        "message": "Successfully removed"
+                    })
+                else:
+                    failed_removals.append(member_email)
+                    results.append({
+                        "email": member_email,
+                        "success": False,
+                        "message": result.get("message", "Failed to remove")
+                    })
+            except Exception as e:
+                failed_removals.append(member_email)
+                results.append({
+                    "email": member_email,
+                    "success": False,
+                    "message": str(e)
+                })
+
+        return {
+            "success": len(failed_removals) == 0,
+            "partial_success": len(successful_removals) > 0 and len(failed_removals) > 0,
+            "results": results,
+            "summary": {
+                "total": len(member_emails),
+                "successful": len(successful_removals),
+                "failed": len(failed_removals),
+                "successful_emails": successful_removals,
+                "failed_emails": failed_removals
+            }
+        }
+
     def delete_group(self, group_name: str) -> Dict[str, Any]:
         """Delete a Google Group (bypassing interactive confirmation).
         
@@ -493,13 +603,31 @@ class GroupMakerAPI:
         
         return True, ""
     
+    @classmethod
+    def validate_email(cls, email: str) -> Tuple[bool, str]:
+        """Validate an email address and return (is_valid, error_message).
+
+        Args:
+            email: Email address to validate
+
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        if not email:
+            return False, "Email address is required"
+
+        if not cls._validate_email(email):
+            return False, "Invalid email address format"
+
+        return True, ""
+
     @staticmethod
     def _validate_email(email: str) -> bool:
         """Validate an email address.
-        
+
         Args:
             email: Email address to validate
-            
+
         Returns:
             True if email is valid
         """

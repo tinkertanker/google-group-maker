@@ -18,6 +18,8 @@ Usage examples:
 - List members of a group (with domain): ./groupmaker.py members group-name@example.org
 - Add a member to a group: ./groupmaker.py add group-name new.member@example.com
 - Add a member as manager: ./groupmaker.py add group-name new.member@example.com --role MANAGER
+- Remove a member from a group: ./groupmaker.py remove group-name member@example.com
+- Remove a member (specifying domain): ./groupmaker.py remove group-name@example.org member@example.com
 - Rename a group: ./groupmaker.py rename old-name new-name
 - Rename a group (specifying domain): ./groupmaker.py rename old-name@example.org new-name
 - Delete a group: ./groupmaker.py delete group-name
@@ -173,6 +175,26 @@ def add_member(service, group_email, member_email, role="MEMBER", retry=True):
             print(f"HINT: If the error mentions 'groupKey', the group may still be propagating in Google's system.")
             return None
 
+def remove_member(service, group_email, member_email):
+    """Remove a member from a Google Group."""
+    try:
+        service.members().delete(
+            groupKey=group_email,
+            memberKey=member_email
+        ).execute()
+        print(f"Removed {member_email} from {group_email}")
+        return True
+    except Exception as e:
+        error_str = str(e)
+        if "Resource Not Found" in error_str:
+            if "memberKey" in error_str:
+                print(f"Error: {member_email} is not a member of {group_email}")
+            else:
+                print(f"Error: Group {group_email} not found")
+        else:
+            print(f"Error removing member: {e}")
+        return False
+
 def ensure_group_exists(service, group_email, max_attempts=3, delay=3):
     """Check if a group exists and wait for it to be available."""
     for attempt in range(max_attempts):
@@ -187,7 +209,7 @@ def ensure_group_exists(service, group_email, max_attempts=3, delay=3):
             else:
                 print(f"Error checking group: {e}")
                 return False
-    
+
     return False
 
 def delete_group(service, group_email):
@@ -417,6 +439,11 @@ def main():
     add_parser.add_argument('--role', choices=['OWNER', 'MANAGER', 'MEMBER'], default='MEMBER',
                       help='Role to assign to the member (default: MEMBER)')
 
+    # Remove member command
+    remove_parser = subparsers.add_parser('remove', help='Remove a member from a Google Group')
+    remove_parser.add_argument('group_name', help='Name of the Google Group to remove a member from (e.g., "class-a-2023" or "class-a-2023@example.com")')
+    remove_parser.add_argument('member_email', help='Email address of the member to remove')
+
     # Rename command
     rename_parser = subparsers.add_parser('rename', help='Rename an existing Google Group')
     rename_parser.add_argument('old_group_name', help='Current name of the Google Group (e.g., "class-a-2023" or "class-a-2023@example.com")')
@@ -535,6 +562,36 @@ def main():
 
         # Add the member
         add_member(service, group_email, args.member_email, role=args.role)
+
+    elif args.command == 'remove':
+        # Validate the group_name
+        is_valid, group_name, email_domain = validate_group_name(args.group_name)
+        if not is_valid:
+            print("\nUSAGE EXAMPLE:")
+            print(f"  ./groupmaker.py remove class-a-2023 member@example.com")
+            print(f"  ./groupmaker.py remove class-a-2023@example.com member@example.com")
+            return
+
+        # Use domain from email if provided, otherwise use command line parameter or default
+        group_domain = email_domain or domain
+
+        # Remove member from the Google Group
+        group_email = f"{group_name}@{group_domain}"
+
+        # Verify the group exists before proceeding
+        if not ensure_group_exists(service, group_email):
+            print(f"Error: Group {group_email} not found or cannot be accessed.")
+            return
+
+        # Validate member email
+        if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', args.member_email):
+            print(f"Error: Invalid email address '{args.member_email}'")
+            print("\nUSAGE EXAMPLE:")
+            print(f"  ./groupmaker.py remove class-a-2023 member@example.com")
+            return
+
+        # Remove the member
+        remove_member(service, group_email, args.member_email)
 
     elif args.command == 'rename':
         # Validate old group name

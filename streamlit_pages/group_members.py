@@ -4,7 +4,6 @@ Group Members page for Google Group Maker Streamlit app.
 
 import streamlit as st
 from typing import List, Dict
-import time
 
 from streamlit_utils.state_manager import StateManager
 from streamlit_utils.cache import cached_list_members, clear_member_cache
@@ -213,7 +212,6 @@ def _remove_members(api: GroupMakerAPI, group_email: str, member_emails: List[st
             # Clear cache and refresh
             clear_member_cache(group_email)
             StateManager.clear_members_cache(group_email)
-            time.sleep(0.5)  # Brief pause to allow UI to show the message
             st.rerun()
 
         except Exception as e:

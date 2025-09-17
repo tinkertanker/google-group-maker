@@ -121,6 +121,18 @@ def validate_group_name(group_name):
     
     return True, group_name, domain_from_email
 
+def validate_email(email):
+    """
+    Validate that an email address is valid.
+
+    Args:
+        email: Email address to validate
+
+    Returns:
+        True if valid, False otherwise
+    """
+    return bool(re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email))
+
 def create_group(service, group_name, group_description="", domain=None):
     """Create a new Google Group."""
     # Use provided domain or default
@@ -584,7 +596,7 @@ def main():
             return
 
         # Validate member email
-        if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', args.member_email):
+        if not validate_email(args.member_email):
             print(f"Error: Invalid email address '{args.member_email}'")
             print("\nUSAGE EXAMPLE:")
             print(f"  ./groupmaker.py remove class-a-2023 member@example.com")

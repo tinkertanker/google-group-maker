@@ -70,6 +70,8 @@ def _render_environment_settings() -> None:
             help="Admin email for authentication (optional)"
         )
         
+        st.caption("💡 **Note:** `ADMIN_EMAIL` must be a super-admin or domain admin with domain-wide delegation access for the service account.")
+        
         if st.form_submit_button("💾 Save Environment Settings"):
             new_env = {
                 "DEFAULT_EMAIL": default_email,

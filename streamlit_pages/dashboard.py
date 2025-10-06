@@ -58,6 +58,8 @@ def _render_configuration_and_status(api: GroupMakerAPI) -> None:
                 icon = "❌"
             st.write(f"{icon} **{key}**: {value}")
 
+        st.caption("💡 **Note:** ADMIN_EMAIL (or DEFAULT_EMAIL if used) must be a super-admin or domain admin with domain-wide delegation access for the service account.")
+
     with col2:
         st.subheader("🔍 System Status")
 

@@ -1,5 +1,10 @@
-# Service account credentials (sensitive information)
+# Service account credentials (legacy file-based approach)
 service-account-credentials.json
+
+# Streamlit secrets (local only)
+.streamlit/*
+!.streamlit/secrets.toml.example
+
 # Don't ignore the example file
 !service-account-credentials.example.json
 

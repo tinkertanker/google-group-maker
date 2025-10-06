@@ -12,6 +12,8 @@ import os
 from typing import List, Dict, Optional, Any, Tuple
 import logging
 
+from config_utils import prepare_credentials_for_cli_env
+
 logger = logging.getLogger(__name__)
 
 class GroupMakerAPI:
@@ -52,6 +54,18 @@ class GroupMakerAPI:
         if self.debug:
             logger.debug(f"Running command: {' '.join(shlex.quote(c) for c in cmd)}")
         
+        # Prepare environment with credentials
+        env = os.environ.copy()
+        env['PYTHONDONTWRITEBYTECODE'] = '1'
+
+        try:
+            cred_env_vars = prepare_credentials_for_cli_env()
+            env.update(cred_env_vars)
+        except ValueError as e:
+            error_msg = str(e)
+            logger.error(error_msg)
+            return False, "", error_msg
+        
         try:
             proc = subprocess.run(
                 cmd, 
@@ -59,7 +73,7 @@ class GroupMakerAPI:
                 text=True, 
                 timeout=timeout,
                 check=False,  # Don't raise on non-zero exit
-                env={**os.environ, 'PYTHONDONTWRITEBYTECODE': '1'}  # Prevent .pyc files
+                env=env  # Pass updated environment with credentials
             )
             return proc.returncode == 0, proc.stdout, proc.stderr
         except subprocess.TimeoutExpired:

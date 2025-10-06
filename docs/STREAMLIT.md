@@ -15,9 +15,20 @@ A user-friendly web interface for the Google Group Maker CLI tool, built with St
 
 ## Prerequisites
 
-- Python 3.9 or higher
-- Service account with domain-wide delegation for Google Admin SDK
-- Proper environment variables configured (see WARP.md)
+Before using the Streamlit interface, ensure you have:
+
+1. **Google Workspace Admin Access**
+   - Admin credentials for your Google Workspace domain
+   - Permissions to create and manage groups
+
+2. **Service Account Credentials**
+   - Service account with Google Admin SDK API access
+   - Credentials configured in **Streamlit Secrets** (recommended) or as JSON file
+   - See [docs/CREDENTIALS.md](CREDENTIALS.md) for detailed setup instructions
+
+3. **Python Environment**
+   - Python 3.6 or higher
+   - pip package manager
 
 ## Setup
 
@@ -32,9 +43,29 @@ A user-friendly web interface for the Google Group Maker CLI tool, built with St
    pip install -r requirements.txt
    ```
 
-3. **Configuration**:
-   - Set up your `.env` file with required variables (see Settings page in the app)
-   - Have your `service-account-credentials.json` file ready
+## Configuration
+
+### Credentials Setup (Streamlit Secrets - Recommended)
+
+The application uses **Streamlit Secrets** for credential management, which works seamlessly in both local development and Streamlit Cloud:
+
+**For Local Development:**
+1. Copy the example secrets file: `cp .streamlit/secrets.toml.example .streamlit/secrets.toml`
+2. Edit `.streamlit/secrets.toml` with your actual service account credentials
+3. The app will automatically load credentials from this file
+
+**For Streamlit Cloud:**
+1. Go to your app's Settings → Secrets in the Streamlit Cloud dashboard
+2. Paste your credentials in TOML format (see Settings page in the app for formatted output)
+3. Save and reboot the app
+
+**Legacy JSON File (Optional):**
+- You can still use `service-account-credentials.json` for local CLI usage
+- The app will fall back to this file if secrets are not configured
+
+For comprehensive credential setup instructions, see [docs/CREDENTIALS.md](CREDENTIALS.md).
+
+### Environment Variables
 
 ## Running the Application
 
@@ -48,22 +79,31 @@ streamlit run streamlit_app.py
 
 The application will open in your default web browser at `http://localhost:8501`.
 
-## First-Time Setup Workflow
+## First-Time Setup Checklist
 
-1. **Configure Settings**:
-   - Go to the "⚙️ Settings" page
-   - Enter your `DEFAULT_EMAIL` (required)
-   - Optionally set `GOOGLE_GROUP_DOMAIN` and `ADMIN_EMAIL`
-   - Upload your service account credentials JSON file
+1. ✅ **Configure Credentials**
+   - Go to the **⚙️ Settings** page
+   - Navigate to the "Streamlit Secrets (Recommended)" tab
+   - Upload your service account JSON file
+   - Click "Save to Local Secrets" (local) or copy TOML for Streamlit Cloud
+   - See [docs/CREDENTIALS.md](CREDENTIALS.md) for detailed instructions
 
-2. **Test Authentication**:
-   - Use the "🔍 Test Connection" button on Settings page
-   - Verify authentication is successful
+2. ✅ **Set Environment Variables**
+   - In Settings, configure:
+     - `DEFAULT_EMAIL`: Your admin email address
+     - `GOOGLE_GROUP_DOMAIN`: Your domain (e.g., `tinkertanker.com`)
+     - `ADMIN_EMAIL`: Admin email for API authentication (optional, uses DEFAULT_EMAIL)
 
-3. **Test with Safe Group**:
-   - Create a test group using a safe name like `test-group-delete-me`
-   - Add some members and test functionality
-   - Delete the test group when done
+3. ✅ **Test Authentication**
+   - Click "Test Connection" in Settings
+   - Or go to Dashboard and click "Test Authentication"
+   - Verify you see a success message
+
+4. ✅ **Create Test Group**
+   - Go to "➕ Create Group"
+   - Create a test group (e.g., `test-group-delete-me`)
+   - Verify it appears in "📋 List Groups"
+   - Delete it when done testing
 
 ## Usage Tips
 
@@ -90,8 +130,39 @@ The application will open in your default web browser at `http://localhost:8501`
 
 ## Security Notes
 
-- Credentials file is saved locally and never committed to git
-- Environment variables are stored in `.env` file
+### Credential Storage
+
+**Streamlit Secrets (Recommended):**
+- The `.streamlit/secrets.toml` file is automatically gitignored
+- Never committed to version control
+- Works seamlessly for both local development and Streamlit Cloud
+- Encrypted and secure when deployed to Streamlit Cloud
+
+**For Streamlit Cloud Users:**
+- Use the **Secrets UI** in your app settings (Settings → Secrets)
+- Paste your credentials in TOML format
+- Credentials are encrypted at rest and never exposed in logs
+- The Settings page in the app provides a formatted TOML snippet you can copy
+
+**Legacy JSON File:**
+- The `service-account-credentials.json` file is also gitignored
+- Supported for local CLI usage and development
+- **Does not work on Streamlit Cloud** (files don't persist)
+- If using this method locally, ensure it's never committed to Git
+
+### Best Practices
+
+1. **Never commit credentials** to version control
+2. **Use Streamlit Secrets** for cloud deployments
+3. **Rotate credentials** regularly via Google Cloud Console
+4. **Limit permissions** - only grant necessary API scopes
+5. **Monitor usage** - review service account activity periodically
+
+For detailed security guidance, see [docs/CREDENTIALS.md](CREDENTIALS.md).
+
+### Other Security Considerations
+
+- Environment variables are stored in `.env` file (also gitignored)
 - All sensitive operations require confirmation
 - Debug mode shows detailed error information (use carefully)
 

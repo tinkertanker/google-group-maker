@@ -35,6 +35,7 @@ import argparse
 import re
 import time
 import sys
+import json
 from googleapiclient.discovery import build
 from google.oauth2 import service_account
 
@@ -58,32 +59,76 @@ if not DEFAULT_EMAIL:
 
 DEFAULT_ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", DEFAULT_EMAIL)
 
+def _load_service_account_credentials():
+    """Load service account credentials from environment or file.
+
+    Returns:
+        Tuple of (creds_dict, source) where:
+        - creds_dict: Dictionary of credentials or None if unavailable
+        - source: 'env', 'file', 'invalid-env', 'invalid-file', or 'missing'
+    """
+    # First try to load from environment variable
+    env_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+    if env_json:
+        try:
+            creds_dict = json.loads(env_json)
+            return creds_dict, 'env'
+        except json.JSONDecodeError as e:
+            print(f"ERROR: Invalid JSON in GOOGLE_SERVICE_ACCOUNT_JSON environment variable: {e}")
+            return None, 'invalid-env'
+
+    # Fall back to service account file
+    SERVICE_ACCOUNT_FILE = 'service-account-credentials.json'
+    if os.path.exists(SERVICE_ACCOUNT_FILE):
+        try:
+            with open(SERVICE_ACCOUNT_FILE, 'r') as f:
+                creds_dict = json.load(f)
+            return creds_dict, 'file'
+        except json.JSONDecodeError as e:
+            print(f"ERROR: Invalid JSON in {SERVICE_ACCOUNT_FILE}: {e}")
+            return None, 'invalid-file'
+        except Exception as e:
+            print(f"ERROR: Failed to read {SERVICE_ACCOUNT_FILE}: {e}")
+            return None, 'missing'
+
+    # No credentials found
+    return None, 'missing'
+
 def create_service():
     """Create and return an authorized service object for the Google Directory API."""
-    # Path to your service account credentials JSON file
-    SERVICE_ACCOUNT_FILE = 'service-account-credentials.json'
-    
-    # Check if credentials file exists
-    if not os.path.exists(SERVICE_ACCOUNT_FILE):
-        print(f"ERROR: {SERVICE_ACCOUNT_FILE} not found!")
-        print("Please check the company Notion documentation for instructions on obtaining this file.")
+    # Load credentials from available sources
+    creds_dict, source = _load_service_account_credentials()
+
+    if creds_dict is None:
+        if source == 'invalid-env':
+            print("ERROR: Credentials are invalid. Please check your configuration.")
+        elif source == 'invalid-file':
+            print("ERROR: The service-account-credentials.json file contains invalid JSON.")
+            print("Please re-download the credentials file from Google Cloud Console.")
+        else:
+            print("ERROR: No service account credentials found!")
+            print("Please provide credentials via:")
+            print("  1. GOOGLE_SERVICE_ACCOUNT_JSON environment variable (for Streamlit Cloud)")
+            print("  2. service-account-credentials.json file (for local development)")
+            print("Check the company Notion documentation for instructions on obtaining credentials.")
         return None
-    
-    # If you're using a service account to authenticate
+
+    # Define scopes
     SCOPES = [
         'https://www.googleapis.com/auth/admin.directory.group',
         'https://www.googleapis.com/auth/admin.directory.group.member'
     ]
-    
+
     # The service account needs to be delegated for a G Suite admin user
     DELEGATED_EMAIL = DEFAULT_ADMIN_EMAIL
-    
-    credentials = service_account.Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-    
+
+    # Create credentials from the dictionary
+    credentials = service_account.Credentials.from_service_account_info(
+        creds_dict, scopes=SCOPES)
+
     # Delegate credentials
     delegated_credentials = credentials.with_subject(DELEGATED_EMAIL)
-    
+
     # Build the service
     service = build('admin', 'directory_v1', credentials=delegated_credentials)
     return service

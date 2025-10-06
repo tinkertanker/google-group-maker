@@ -13,6 +13,12 @@ from typing import List, Dict, Optional, Any, Tuple
 import logging
 
 from config_utils import prepare_credentials_for_cli_env
+from cli_parsers import (
+    parse_groups_output,
+    parse_members_output,
+    parse_email_list as cli_parse_email_list,
+    validate_email
+)
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +36,18 @@ class GroupMakerAPI:
         self.default_timeout = int(os.environ.get('CLI_TIMEOUT', timeout))
         if debug:
             logging.basicConfig(level=logging.DEBUG)
+    
+    @staticmethod
+    def _validate_email(email: str) -> bool:
+        """Validate an email address format.
+        
+        Args:
+            email: Email address string to validate
+            
+        Returns:
+            True if email format is valid, False otherwise
+        """
+        return validate_email(email)
     
     def _run_cli(self, args: List[str], timeout: int = 60) -> Tuple[bool, str, str]:
         """Run the CLI command and return success status, stdout, stderr.
@@ -443,144 +461,41 @@ class GroupMakerAPI:
     
     def _parse_groups_output(self, output: str) -> List[Dict[str, str]]:
         """Parse the groups list output into structured data.
-        
+
+        Delegates to cli_parsers.parse_groups_output for actual parsing logic.
+
         Args:
             output: Raw CLI output
-            
+
         Returns:
             List of group dictionaries
         """
-        groups = []
-        lines = output.strip().split('\n')
-        
-        # Look for the header line with dashes
-        header_found = False
-        for i, line in enumerate(lines):
-            if line.startswith('-' * 20):  # Look for separator line
-                header_found = True
-                continue
-            
-            if header_found and line.strip() and not line.startswith('-'):
-                # Parse the formatted output
-                # Format: EMAIL ADDRESS (40 chars) NAME (30 chars) DESCRIPTION
-                if len(line) >= 40:
-                    email = line[:40].strip()
-                    remaining = line[40:]
-                    if len(remaining) >= 30:
-                        name = remaining[:30].strip()
-                        description = remaining[30:].strip()
-                    else:
-                        name = remaining.strip()
-                        description = ""
-                    
-                    if email and email != 'EMAIL ADDRESS':  # Skip header row
-                        groups.append({
-                            "email": email,
-                            "name": name,
-                            "description": description
-                        })
-        
-        return groups
+        return parse_groups_output(output)
     
     def _parse_members_output(self, output: str) -> List[Dict[str, str]]:
         """Parse the members list output into structured data.
-        
+
+        Delegates to cli_parsers.parse_members_output for actual parsing logic.
+
         Args:
             output: Raw CLI output
-            
+
         Returns:
             List of member dictionaries
         """
-        members = []
-        lines = output.strip().split('\n')
-        
-        # Look for the header line with dashes
-        header_found = False
-        for i, line in enumerate(lines):
-            if line.startswith('-' * 20):  # Look for separator line
-                header_found = True
-                continue
-                
-            if header_found and line.strip() and not line.startswith('-') and not line.startswith('Summary:'):
-                # Parse the formatted output
-                # Format: EMAIL ADDRESS (45) NAME (25) ROLE (15) TYPE (10) STATUS
-                if len(line) >= 45:
-                    email = line[:45].strip()
-                    remaining = line[45:]
-                    
-                    if len(remaining) >= 25:
-                        name = remaining[:25].strip()
-                        remaining = remaining[25:]
-                        
-                        if len(remaining) >= 15:
-                            role = remaining[:15].strip()
-                            # Remove emoji markers
-                            role = role.replace('👑 ', '').replace('⭐ ', '').strip()
-                            remaining = remaining[15:]
-                            
-                            if len(remaining) >= 10:
-                                member_type = remaining[:10].strip()
-                                status = remaining[10:].strip()
-                            else:
-                                member_type = remaining.strip()
-                                status = ""
-                        else:
-                            role = remaining.strip()
-                            member_type = ""
-                            status = ""
-                    else:
-                        name = remaining.strip()
-                        role = ""
-                        member_type = ""
-                        status = ""
-                    
-                    if email and email != 'EMAIL ADDRESS':  # Skip header row
-                        members.append({
-                            "email": email,
-                            "name": name,
-                            "role": role,
-                            "type": member_type,
-                            "status": status
-                        })
-        
-        return members
+        return parse_members_output(output)
     
     @classmethod
     def parse_email_list(cls, text: str) -> List[str]:
         """Parse a text input containing multiple email addresses.
-        
+
         Args:
             text: Text containing email addresses
-            
+
         Returns:
             List of valid email addresses
         """
-        if not text:
-            return []
-        
-        # Split by common delimiters
-        emails = []
-        for delimiter in ['\n', ',', ';', ' ']:
-            if delimiter in text:
-                parts = text.split(delimiter)
-                for part in parts:
-                    part = part.strip()
-                    if part and '@' in part:
-                        emails.append(part)
-                break
-        else:
-            # No delimiter found, treat as single email
-            if text.strip() and '@' in text.strip():
-                emails.append(text.strip())
-        
-        # Deduplicate and validate
-        valid_emails = []
-        for email in emails:
-            email = email.strip()
-            if email and email not in valid_emails and cls._validate_email(email):
-                valid_emails.append(email)
-        
-        return valid_emails
+        return cli_parse_email_list(text)
     
     @classmethod
     def validate_group_name(cls, group_name: str) -> Tuple[bool, str]:
@@ -634,19 +549,3 @@ class GroupMakerAPI:
             return False, "Invalid email address format"
 
         return True, ""
-
-    @staticmethod
-    def _validate_email(email: str) -> bool:
-        """Validate an email address.
-
-        Args:
-            email: Email address to validate
-
-        Returns:
-            True if email is valid
-        """
-        if not email or not isinstance(email, str):
-            return False
-        
-        email_pattern = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
-        return bool(email_pattern.match(email.strip()))

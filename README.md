@@ -2,26 +2,57 @@
 
 A command-line utility for automating the creation and management of Google Groups.
 
-## Quick Start
+## Quick Start (Streamlit Web Interface)
 
-### Web Interface (Streamlit)
+### Prerequisites
+- Python 3.6+
+- Google Workspace Admin access
+- Service account credentials from Google Cloud Console
 
-```bash
-# Install dependencies
-pip install -r requirements.txt
+### Setup
 
-# Set up environment variables
-echo "DEFAULT_EMAIL=your-email@example.com" > .env
+1. **Clone and install**:
+   ```bash
+   git clone <repository-url>
+   cd google-group-maker
+   pip install -r requirements.txt
+   ```
 
-# Set up service account credentials
-cp service-account-credentials.example.json service-account-credentials.json
-# Edit service-account-credentials.json with your actual credentials
+2. **Configure credentials**:
 
-# Run the web interface
-streamlit run streamlit_app.py
-```
+   The application uses **Streamlit Secrets** for credential management (recommended for both local dev and cloud deployment). See [docs/CREDENTIALS.md](docs/CREDENTIALS.md) for comprehensive setup instructions.
 
-The web interface provides an intuitive way to manage Google Groups with all the same functionality as the CLI.
+   **Quick setup:**
+   ```bash
+   # For local development
+   cp .streamlit/secrets.toml.example .streamlit/secrets.toml
+   # Edit .streamlit/secrets.toml with your service account credentials
+   ```
+
+   For Streamlit Cloud, paste your credentials into App Settings → Secrets (see the credentials guide for details).
+
+   **Legacy fallback**: The `service-account-credentials.json` file is still supported for CLI usage and local development, but won't work on Streamlit Cloud.
+
+3. **Configure environment**:
+   ```bash
+   cp .env.example .env
+   # Edit .env and set your DEFAULT_EMAIL and other settings
+   ```
+
+4. **Run the app**:
+   ```bash
+   streamlit run streamlit_app.py
+   ```
+
+5. **Access the interface**:
+   - Navigate to Settings page to verify configuration
+   - Test authentication
+   - Start creating groups!
+
+### Features
+- **Streamlit Secrets Support**: Credentials are automatically loaded from Streamlit secrets (cloud-ready!)
+- **Web Interface**: User-friendly Streamlit interface for all operations
+- **CLI Support**: Command-line tools available for automation and scripting
 
 ### Command Line Interface
 
@@ -79,12 +110,23 @@ Available as both a command-line tool and a web interface (Streamlit).
     pip install -r requirements.txt
     ```
 
-2. **Service Account Credentials:**
+2. **Service Account Credentials**:
 
-    - You need a `service-account-credentials.json` file with appropriate permissions
-    - **Note:** Check the company Notion documentation for instructions on obtaining this file
-    - This file contains sensitive information and should not be committed to Git
-    - See `service-account-credentials.example.json` for the expected format
+   **Preferred: Streamlit Secrets** (works for both local dev and Streamlit Cloud)
+   
+   Copy the example file and configure your credentials:
+   ```bash
+   cp .streamlit/secrets.toml.example .streamlit/secrets.toml
+   # Edit .streamlit/secrets.toml with your service account credentials
+   ```
+   
+   The `.streamlit/secrets.toml` file is automatically gitignored and will never be committed to version control.
+   
+   **Optional: Legacy JSON file** (CLI/local dev fallback only)
+   
+   If you prefer using a JSON file for CLI commands or local development, you can place your credentials in `service-account-credentials.json`. Note that this method does NOT work on Streamlit Cloud.
+   
+   📚 **For detailed setup instructions, troubleshooting, and migration guide**, see [docs/CREDENTIALS.md](docs/CREDENTIALS.md)
 
 3. Make the script executable:
     ```bash

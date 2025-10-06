@@ -30,9 +30,52 @@ SECRETS_KEY = "google_service_account"
 REQUIRED_FIELDS = ["type", "project_id", "private_key", "client_email"]
 
 def load_env():
-    """Load environment variables from .env file."""
+    """Load environment variables from .env file and Streamlit secrets.
+    
+    Priority order:
+    1. Existing OS environment variables (highest - not overridden)
+    2. Streamlit secrets ([env] section or top-level keys)
+    3. .env file (local development)
+    """
+    # First load from .env file (local development)
+    # override=False means it won't override existing OS env vars
     if ENV_FILE.exists():
         load_dotenv(dotenv_path=ENV_FILE, override=False)
+    
+    # Then check Streamlit secrets for any missing values (cloud deployment)
+    try:
+        import streamlit as st
+        
+        if hasattr(st, 'secrets'):
+            # Try [env] section first (recommended structure)
+            if 'env' in st.secrets:
+                # Convert to plain dict to ensure we can use .get() safely
+                env_section = dict(st.secrets['env'])
+                for key in ENV_KEYS:
+                    # Only set if not already in environment or empty
+                    if key not in os.environ or not os.environ[key]:
+                        value = env_section.get(key)
+                        # Ensure value exists and coerce to string
+                        if value is not None and str(value).strip():
+                            os.environ[key] = str(value)
+            
+            # Also check top-level keys as fallback
+            # (for backwards compatibility or simpler configs)
+            for key in ENV_KEYS:
+                if key not in os.environ or not os.environ[key]:
+                    if key in st.secrets:
+                        value = st.secrets[key]
+                        # Ensure value exists and coerce to string
+                        if value is not None and str(value).strip():
+                            os.environ[key] = str(value)
+                        
+    except ImportError:
+        # Streamlit not available (CLI usage)
+        pass
+    except Exception:
+        # Error accessing secrets, silently continue
+        # (don't break the app if secrets are misconfigured)
+        pass
 
 def get_env():
     """Get all configuration environment variables."""

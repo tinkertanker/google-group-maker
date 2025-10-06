@@ -18,33 +18,29 @@ A command-line utility for automating the creation and management of Google Grou
    pip install -r requirements.txt
    ```
 
-2. **Configure credentials**:
-
-   The application uses **Streamlit Secrets** for credential management (recommended for both local dev and cloud deployment). See [docs/CREDENTIALS.md](docs/CREDENTIALS.md) for comprehensive setup instructions.
-
-   **Quick setup:**
+2. **Configure credentials and environment:**
    ```bash
-   # For local development
+   # Copy the example secrets file
    cp .streamlit/secrets.toml.example .streamlit/secrets.toml
-   # Edit .streamlit/secrets.toml with your service account credentials
    ```
 
-   For Streamlit Cloud, paste your credentials into App Settings → Secrets (see the credentials guide for details).
+   Edit `.streamlit/secrets.toml` to include:
+   - **`[google_service_account]` section** - Your Google service account credentials
+   - **`[env]` section** - Required environment variables:
+     - `DEFAULT_EMAIL` - Your admin email address
+     - `GOOGLE_GROUP_DOMAIN` - Your organization's domain
+     - `ADMIN_EMAIL` - Optional (defaults to DEFAULT_EMAIL)
 
-   **Legacy fallback**: The `service-account-credentials.json` file is still supported for CLI usage and local development, but won't work on Streamlit Cloud.
+   See [Credentials Setup Guide](docs/CREDENTIALS.md) for detailed instructions.
 
-3. **Configure environment**:
-   ```bash
-   cp .env.example .env
-   # Edit .env and set your DEFAULT_EMAIL and other settings
-   ```
+   > **Note:** A `.env` file is optional and mainly used for CLI usage or local overrides. Streamlit secrets is the recommended approach for both local and cloud deployment.
 
-4. **Run the app**:
+3. **Run the application:**
    ```bash
    streamlit run streamlit_app.py
    ```
 
-5. **Access the interface**:
+4. **Access the interface**:
    - Navigate to Settings page to verify configuration
    - Test authentication
    - Start creating groups!
@@ -110,22 +106,18 @@ Available as both a command-line tool and a web interface (Streamlit).
     pip install -r requirements.txt
     ```
 
-2. **Service Account Credentials**:
+2. **Service Account Credentials**
 
-   **Preferred: Streamlit Secrets** (works for both local dev and Streamlit Cloud)
-   
-   Copy the example file and configure your credentials:
-   ```bash
-   cp .streamlit/secrets.toml.example .streamlit/secrets.toml
-   # Edit .streamlit/secrets.toml with your service account credentials
-   ```
-   
-   The `.streamlit/secrets.toml` file is automatically gitignored and will never be committed to version control.
-   
-   **Optional: Legacy JSON file** (CLI/local dev fallback only)
-   
-   If you prefer using a JSON file for CLI commands or local development, you can place your credentials in `service-account-credentials.json`. Note that this method does NOT work on Streamlit Cloud.
-   
+   The recommended approach is to use **Streamlit Secrets** (see [Credentials Setup Guide](docs/CREDENTIALS.md)):
+
+   - Edit `.streamlit/secrets.toml` with your service account credentials (`[google_service_account]` section)
+   - Also configure environment variables in the `[env]` section (DEFAULT_EMAIL, GOOGLE_GROUP_DOMAIN, optional ADMIN_EMAIL)
+   - Both `.streamlit/secrets.toml` and service account JSON files are gitignored
+
+   **Alternative (CLI/local dev):** You can use `service-account-credentials.json` as a fallback, but this won't work on Streamlit Cloud.
+
+   For Streamlit Cloud deployment, configure secrets via the Cloud UI (see docs).
+
    📚 **For detailed setup instructions, troubleshooting, and migration guide**, see [docs/CREDENTIALS.md](docs/CREDENTIALS.md)
 
 3. Make the script executable:

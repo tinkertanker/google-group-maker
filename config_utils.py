@@ -19,15 +19,16 @@ except ImportError:
     except ImportError:
         tomllib = None
 
+from streamlit_utils.credentials_loader import (
+    CredentialsLoader,
+    CredentialValidationError,
+    SECRETS_KEY,
+    SECRETS_FILE_LOCAL,
+    CREDENTIALS_FILE
+)
+
 ENV_FILE = Path(".env")
 ENV_KEYS = ["DEFAULT_EMAIL", "GOOGLE_GROUP_DOMAIN", "ADMIN_EMAIL"]
-
-# Secrets configuration
-SECRETS_FILE_LOCAL = Path(".streamlit/secrets.toml")
-SECRETS_KEY = "google_service_account"
-
-# Required fields for service account credentials
-REQUIRED_FIELDS = ["type", "project_id", "private_key", "client_email"]
 
 def load_env():
     """Load environment variables from .env file and Streamlit secrets.
@@ -97,10 +98,13 @@ def set_env(values):
 
 def get_credentials_path():
     """Get the path to the service account credentials file."""
-    return Path("service-account-credentials.json")
+    return CREDENTIALS_FILE
 
 def validate_service_account_dict(creds: Dict[str, Any]) -> None:
     """Validate service account credentials dictionary.
+
+    Delegates to CredentialsLoader for validation and raises ValueError
+    for backwards compatibility with existing callers.
 
     Args:
         creds: Credentials dictionary to validate
@@ -108,20 +112,18 @@ def validate_service_account_dict(creds: Dict[str, Any]) -> None:
     Raises:
         ValueError: If credentials are invalid
     """
-    # Check for required fields
-    missing_fields = [field for field in REQUIRED_FIELDS if field not in creds]
+    errors = CredentialsLoader.validate_credentials(creds)
 
-    if missing_fields:
-        raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
+    if errors:
+        # Format errors into a single message for ValueError
+        error_messages = []
+        for error in errors:
+            msg = f"{error['field']}: {error['issue']}"
+            if error.get('hint'):
+                msg += f" ({error['hint']})"
+            error_messages.append(msg)
 
-    # Validate type field
-    if creds.get('type') != 'service_account':
-        raise ValueError(f"Invalid credentials type: {creds.get('type')}. Expected 'service_account'")
-
-    # Validate private key format
-    private_key = creds.get('private_key', '')
-    if not isinstance(private_key, str) or not private_key.startswith('-----BEGIN'):
-        raise ValueError("Invalid private key format")
+        raise ValueError("; ".join(error_messages))
 
 def _format_toml_section(name: str, values: Dict[str, Any]) -> str:
     """Format a dictionary as a TOML section.
@@ -158,127 +160,26 @@ def _format_toml_section(name: str, values: Dict[str, Any]) -> str:
 
     return '\n'.join(lines)
 
-def _load_credentials_from_runtime_secrets() -> Optional[Dict[str, Any]]:
-    """Load credentials from Streamlit runtime secrets.
-
-    Returns:
-        Credentials dict if found, None otherwise
-    """
-    try:
-        import streamlit as st
-
-        # Check if secrets are available
-        if hasattr(st, 'secrets') and SECRETS_KEY in st.secrets:
-            secrets_data = st.secrets[SECRETS_KEY]
-
-            # If it's a string, parse as JSON
-            if isinstance(secrets_data, str):
-                return json.loads(secrets_data)
-
-            # Otherwise, convert to dict (Streamlit secrets might be dict-like)
-            return dict(secrets_data)
-
-    except ImportError:
-        # Streamlit not available
-        pass
-    except Exception:
-        # Error accessing secrets
-        pass
-
-    return None
-
-def _load_credentials_from_local_secrets() -> Optional[Dict[str, Any]]:
-    """Load credentials from local .streamlit/secrets.toml file.
-
-    Returns:
-        Credentials dict if found, None otherwise
-    """
-    if not SECRETS_FILE_LOCAL.exists():
-        return None
-
-    if tomllib is None:
-        # TOML parser not available
-        return None
-
-    try:
-        with open(SECRETS_FILE_LOCAL, 'rb') as f:
-            data = tomllib.load(f)
-
-        if SECRETS_KEY in data:
-            return dict(data[SECRETS_KEY])
-
-    except Exception:
-        # Error reading or parsing TOML
-        pass
-
-    return None
-
-def _load_credentials_from_file() -> Optional[Dict[str, Any]]:
-    """Load credentials from service-account-credentials.json file.
-
-    Returns:
-        Credentials dict if found, None otherwise
-    """
-    path = get_credentials_path()
-
-    if not path.exists():
-        return None
-
-    try:
-        with open(path, 'r') as f:
-            return json.load(f)
-    except Exception:
-        # Error reading or parsing JSON
-        return None
-
-def get_service_account_credentials() -> Tuple[Optional[Dict[str, Any]], str]:
+def get_service_account_credentials() -> Tuple[Optional[Dict[str, Any]], str, Dict[str, Any]]:
     """Get service account credentials from available sources.
 
-    Tries sources in priority order:
+    Delegates to CredentialsLoader which tries sources in priority order:
     1. Streamlit runtime secrets
     2. Local .streamlit/secrets.toml
     3. service-account-credentials.json file
 
     Returns:
-        Tuple of (credentials_dict, source) where source is:
-        - "secrets" (runtime or local secrets file)
-        - "file" (JSON file)
-        - "none" (no credentials found)
+        Tuple of (credentials_dict, source, metadata) where:
+        - credentials_dict: Valid credentials or None if not found/invalid
+        - source: "runtime_secrets", "local_secrets", "file", or "none"
+        - metadata: Dict with "errors", "source_detail", "validation_errors" keys
     """
-    # Try runtime secrets first
-    creds = _load_credentials_from_runtime_secrets()
-    if creds:
-        try:
-            validate_service_account_dict(creds)
-            return creds, "secrets"
-        except ValueError:
-            # Invalid credentials in secrets
-            pass
-
-    # Try local secrets file
-    creds = _load_credentials_from_local_secrets()
-    if creds:
-        try:
-            validate_service_account_dict(creds)
-            return creds, "secrets"
-        except ValueError:
-            # Invalid credentials in local secrets
-            pass
-
-    # Fall back to JSON file
-    creds = _load_credentials_from_file()
-    if creds:
-        try:
-            validate_service_account_dict(creds)
-            return creds, "file"
-        except ValueError:
-            # Invalid credentials in file
-            pass
-
-    return None, "none"
+    return CredentialsLoader.get_credentials()
 
 def prepare_credentials_for_cli_env() -> Dict[str, str]:
     """Prepare environment variables with credentials for CLI subprocess.
+
+    Delegates to CredentialsLoader for credential retrieval and serialization.
 
     Returns:
         Dict of environment variables to pass to subprocess
@@ -286,18 +187,35 @@ def prepare_credentials_for_cli_env() -> Dict[str, str]:
     Raises:
         ValueError: If no valid credentials found
     """
-    creds, source = get_service_account_credentials()
+    creds, source, metadata = CredentialsLoader.get_credentials()
 
     if creds is None:
-        raise ValueError("No valid service account credentials found")
+        # Format error message from metadata
+        errors = metadata.get("errors", []) + metadata.get("validation_errors", [])
+        if errors:
+            error_messages = [f"{e.get('field', 'Unknown')}: {e.get('issue', 'Unknown issue')}"
+                            for e in errors]
+            raise ValueError("; ".join(error_messages))
+        else:
+            raise ValueError("No valid service account credentials found")
 
-    # Serialize credentials to JSON string
-    json_str = json.dumps(creds)
+    try:
+        env_vars = CredentialsLoader.prepare_cli_env(creds)
+    except CredentialValidationError as e:
+        raise ValueError(str(e))
 
-    return {
-        "GOOGLE_SERVICE_ACCOUNT_JSON": json_str,
-        "GOOGLE_SERVICE_ACCOUNT_SOURCE": source
-    }
+    # Map loader sources back to legacy format for backwards compatibility
+    # "runtime_secrets" and "local_secrets" both map to "secrets"
+    if source in ["runtime_secrets", "local_secrets"]:
+        legacy_source = "secrets"
+    elif source == "file":
+        legacy_source = "file"
+    else:
+        legacy_source = "none"
+
+    env_vars["GOOGLE_SERVICE_ACCOUNT_SOURCE"] = legacy_source
+
+    return env_vars
 
 def format_credentials_for_secrets(creds: Dict[str, Any]) -> str:
     """Format credentials as TOML snippet for Streamlit secrets.
@@ -368,7 +286,7 @@ def save_credentials_to_local_secrets(creds: Dict[str, Any]) -> Path:
 
 def credentials_exist():
     """Check if service account credentials are available from any source."""
-    creds, _ = get_service_account_credentials()
+    creds, source, metadata = get_service_account_credentials()
     return creds is not None
 
 def save_credentials_file(bytes_data):
@@ -420,21 +338,40 @@ def get_config_summary():
     """Get a summary of the current configuration for display."""
     env = get_env()
 
-    # Get credentials info
-    creds, source = get_service_account_credentials()
+    # Get credentials info with new signature
+    creds, source, metadata = get_service_account_credentials()
 
     if creds:
         creds_status = "Present"
-        if source == "secrets":
-            creds_source = "Streamlit Secrets"
+
+        # Map sources to user-friendly labels
+        if source == "runtime_secrets":
+            creds_source = "Streamlit Runtime Secrets"
+        elif source == "local_secrets":
+            creds_source = "Local Secrets File"
         elif source == "file":
-            creds_source = "Local File"
+            creds_source = "Local JSON File"
         else:
             creds_source = "Unknown"
+
+        # Check if there were validation warnings in metadata
+        validation_errors = metadata.get("validation_errors", [])
+        if validation_errors:
+            creds_status = "Present (validation issues)"
+
     else:
         creds_status = "Missing"
         creds_source = "Not configured"
-    
+
+        # Show why credentials are missing from metadata
+        errors = metadata.get("errors", [])
+        if errors:
+            # Take first error as hint
+            first_error = errors[0]
+            hint = first_error.get("hint", "")
+            if hint:
+                creds_source = f"Not configured ({hint})"
+
     return {
         "DEFAULT_EMAIL": env.get("DEFAULT_EMAIL", "Not set"),
         "GOOGLE_GROUP_DOMAIN": env.get("GOOGLE_GROUP_DOMAIN") or "tinkertanker.com (default)",

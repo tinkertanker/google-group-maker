@@ -6,10 +6,10 @@ compatibility. Existing code can continue to import from this module while new
 code can import directly from the specific component modules.
 
 Component modules:
-- feedback_components: User feedback messages (success, error, warning, info)
-- input_components: Input widgets (selectors, text inputs, confirmations)
-- display_components: Display widgets (member display, exports, action buttons)
-- execution_helpers: Execution utilities (spinners, formatters)
+    * feedback_components: User feedback messages (success, error, warning, info)
+    * input_components: Input widgets (selectors, text inputs, confirmations)
+    * display_components: Display widgets (member display, exports, action buttons)
+    * execution_helpers: Execution utilities (spinners, formatters)
 
 For new code, prefer importing directly from the specific modules, e.g.:
     from streamlit_components.feedback_components import show_success

@@ -22,11 +22,26 @@ __all__ = [
 
 
 def member_display(members: List[Dict[str, Any]]) -> None:
-    """Display members in a formatted way.
+    """Display members in a formatted way with role summaries and detailed listings.
 
     Args:
-        members: List of member dictionaries following the API schema
-                 (email, name, role, type, status)
+        members: List of member dictionaries following the API schema.
+                 Each dictionary must contain the following keys:
+                 
+                 - 'email' (str): Member's email address (required, primary identifier)
+                 - 'name' (str): Display name of the member (optional, may be empty)
+                 - 'role' (str): Member's role in the group (OWNER, MANAGER, or MEMBER)
+                 - 'type' (str): Member type (e.g., USER, GROUP, SERVICE_ACCOUNT)
+                 - 'status' (str): Membership status (e.g., ACTIVE, SUSPENDED)
+                 
+                 Example member dict:
+                 {
+                     'email': 'user@example.com',
+                     'name': 'John Doe',
+                     'role': 'MEMBER',
+                     'type': 'USER',
+                     'status': 'ACTIVE'
+                 }
     """
     if not members:
         show_info("👤 No members found in this group.")

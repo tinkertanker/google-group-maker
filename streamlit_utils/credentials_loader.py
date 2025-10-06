@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 import json
 
-# Try to import TOML parser (tomllib in Python 3.11+, tomli as fallback)
+# TOML parser: tomllib is stdlib from Python 3.11+, tomli is the backport for earlier versions
 try:
     import tomllib
 except ImportError:
@@ -141,6 +141,28 @@ class CredentialsLoader:
             })
         
         return errors
+    
+    @staticmethod
+    def _validate_candidate(creds: Optional[Dict[str, Any]], meta: Dict[str, Any]) -> bool:
+        """Validate credentials candidate and update metadata.
+        
+        Helper to avoid duplicating validation logic across sources.
+        
+        Args:
+            creds: Credentials dictionary or None
+            meta: Metadata dictionary to update with validation results
+            
+        Returns:
+            True if credentials are valid, False otherwise
+        """
+        if creds is None:
+            meta["validation_errors"] = []
+            return False
+        
+        validation_errors = CredentialsLoader.validate_credentials(creds)
+        meta["validation_errors"] = validation_errors
+        
+        return len(validation_errors) == 0
     
     @staticmethod
     def load_from_runtime_secrets() -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
@@ -317,68 +339,74 @@ class CredentialsLoader:
     @staticmethod
     def get_credentials() -> Tuple[Optional[Dict[str, Any]], str, Dict[str, Any]]:
         """Get service account credentials from available sources with fallback.
-        
+
         Tries sources in priority order:
         1. Streamlit runtime secrets (st.secrets)
         2. Local .streamlit/secrets.toml
         3. service-account-credentials.json file
-        
+
         Only returns credentials that pass validation. If credentials are found
         but invalid, continues to next source.
-        
+
         Returns:
             Tuple of (credentials_dict, source, metadata) where:
             - credentials_dict: Valid credentials or None if not found/invalid
             - source: "runtime_secrets", "local_secrets", "file", or "none"
             - metadata: {"errors": [...], "source_detail": str, "validation_errors": [...]}
         """
-        # Try runtime secrets first
-        creds, meta = CredentialsLoader.load_from_runtime_secrets()
-        if creds:
-            # Validate credentials
-            validation_errors = CredentialsLoader.validate_credentials(creds)
-            if not validation_errors:
+        # Define credential sources in priority order
+        sources = [
+            (CredentialsLoader.load_from_runtime_secrets, "runtime_secrets"),
+            (CredentialsLoader.load_from_local_secrets, "local_secrets"),
+            (CredentialsLoader.load_from_file, "file")
+        ]
+
+        # Track latest metadata from most recent attempt
+        latest_metadata = None
+
+        for loader_fn, source_label in sources:
+            creds, meta = loader_fn()
+
+            # Ensure metadata has required defaults
+            if "errors" not in meta:
+                meta["errors"] = []
+            if "validation_errors" not in meta:
                 meta["validation_errors"] = []
-                return creds, "runtime_secrets", meta
-            else:
-                # Invalid credentials, continue to next source
-                meta["validation_errors"] = validation_errors
-        
-        # Try local secrets file
-        creds, meta = CredentialsLoader.load_from_local_secrets()
-        if creds:
-            # Validate credentials
-            validation_errors = CredentialsLoader.validate_credentials(creds)
-            if not validation_errors:
-                meta["validation_errors"] = []
-                return creds, "local_secrets", meta
-            else:
-                # Invalid credentials, continue to next source
-                meta["validation_errors"] = validation_errors
-        
-        # Fall back to JSON file
-        creds, meta = CredentialsLoader.load_from_file()
-        if creds:
-            # Validate credentials
-            validation_errors = CredentialsLoader.validate_credentials(creds)
-            if not validation_errors:
-                meta["validation_errors"] = []
-                return creds, "file", meta
-            else:
-                # Invalid credentials, no more sources to try
-                meta["validation_errors"] = validation_errors
-                return None, "none", meta
-        
+            if "source_detail" not in meta:
+                meta["source_detail"] = source_label
+
+            # Track this attempt's metadata
+            latest_metadata = meta
+
+            # Validate and return if successful
+            if CredentialsLoader._validate_candidate(creds, meta):
+                # Ensure source_detail matches the successful source
+                meta["source_detail"] = source_label
+                return creds, source_label, meta
+
         # No credentials found in any source
-        return None, "none", {
-            "errors": [{
-                "field": "credentials",
-                "issue": "No credentials found in any source",
-                "hint": "Upload credentials or configure Streamlit secrets"
-            }],
-            "source_detail": "none",
-            "validation_errors": []
-        }
+        # Use latest metadata if available, otherwise create fallback
+        if latest_metadata:
+            # If no errors were provided, add fallback error
+            if not latest_metadata.get("errors") and not latest_metadata.get("validation_errors"):
+                latest_metadata["errors"] = [{
+                    "field": "credentials",
+                    "issue": "No credentials found in any source",
+                    "hint": "Upload credentials or configure Streamlit secrets"
+                }]
+
+            return None, "none", latest_metadata
+        else:
+            # Fallback if no loaders were attempted (shouldn't happen)
+            return None, "none", {
+                "errors": [{
+                    "field": "credentials",
+                    "issue": "No credentials found in any source",
+                    "hint": "Upload credentials or configure Streamlit secrets"
+                }],
+                "source_detail": "none",
+                "validation_errors": []
+            }
     
     @staticmethod
     def prepare_cli_env(credentials: Dict[str, Any]) -> Dict[str, str]:

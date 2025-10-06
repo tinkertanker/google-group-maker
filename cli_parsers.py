@@ -27,6 +27,9 @@ Note: Role markers (👑 for OWNER, ⭐ for MANAGER) are stripped during parsing
 import re
 from typing import List, Dict
 
+# Compiled email validation pattern for performance (used by _validate_email)
+EMAIL_PATTERN = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+
 # Public API
 __all__ = [
     'parse_groups_output',
@@ -50,8 +53,7 @@ def _validate_email(email: str) -> bool:
     if not email or not isinstance(email, str):
         return False
     
-    email_pattern = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
-    return bool(email_pattern.match(email.strip()))
+    return bool(EMAIL_PATTERN.match(email.strip()))
 
 
 def validate_email(email: str) -> bool:

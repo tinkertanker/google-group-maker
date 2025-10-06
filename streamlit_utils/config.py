@@ -44,16 +44,19 @@ SUCCESS_MESSAGES = {
     "group_renamed": "✅ Successfully renamed group to: {new_name}",
     "members_added": "✅ Successfully added {count} members",
     "settings_saved": "✅ Environment settings saved successfully!",
-    "credentials_saved": "✅ Credentials file saved successfully!"
+    "credentials_saved_secrets": "✅ Credentials saved to .streamlit/secrets.toml!",
+    "credentials_saved_file": "✅ Credentials saved to local JSON file!",
+    "credentials_copied": "📋 TOML configuration copied to clipboard!"
 }
 
 ERROR_MESSAGES = {
     "group_name_required": "Group name is required",
     "trainer_email_required": "Valid trainer email is required",
     "domain_required": "Domain is required",
-    "no_credentials": "❌ No credentials file found. Please upload credentials first.",
+    "no_credentials": "❌ No credentials configured. Please add credentials in the Settings page.",
     "no_default_email": "❌ DEFAULT_EMAIL not set. Please configure environment variables first.",
-    "invalid_json": "❌ Invalid JSON file. Please upload a valid service account credentials file."
+    "invalid_json": "❌ Invalid JSON file. Please upload a valid service account credentials file.",
+    "secrets_write_failed": "❌ Failed to write secrets file. Check file permissions."
 }
 
 # Getting started guide
@@ -84,6 +87,28 @@ This will:
 RENAME_WARNING = "⚠️ **Warning**: Renaming a group changes its email address. Update any references accordingly."
 
 CREDENTIALS_WARNING = """
-**Security Note**: The credentials file is saved locally and should never be committed to version control.
-Make sure your `.gitignore` includes `service-account-credentials.json`.
+**🔐 Credentials Best Practices:**
+
+**For Streamlit Cloud (Recommended):**
+- Use Streamlit Secrets for encrypted, cloud-ready storage
+- Navigate to: App Settings → Secrets → Paste TOML configuration
+- Credentials are never committed to version control
+
+**For Local Development:**
+- Use `.streamlit/secrets.toml` (recommended) or fallback to `service-account-credentials.json`
+- Both files are automatically gitignored
+
+**Security:** Never commit credentials to Git!
+"""
+
+CLOUD_SECRETS_INSTRUCTIONS = """
+**📋 Streamlit Cloud Setup:**
+
+1. Copy the TOML configuration above using the copy button
+2. Go to your Streamlit Cloud dashboard
+3. Select your app → Settings (⚙️) → Secrets
+4. Paste the TOML configuration into the text area
+5. Click "Save" and reboot your app
+
+Your app will now use encrypted Streamlit secrets for authentication!
 """

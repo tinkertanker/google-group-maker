@@ -44,6 +44,14 @@ def _render_configuration_and_status(api: GroupMakerAPI) -> None:
         for key, value in config.items():
             if key == "Credentials":
                 icon = "✅" if value == "Present" else "❌"
+            elif key == "Credentials Source":
+                # Show meaningful icons for credential source
+                if "Streamlit Secrets" in value:
+                    icon = "☁️"  # Cloud for secrets
+                elif "Local File" in value:
+                    icon = "💾"  # Floppy disk for file
+                else:
+                    icon = "⚠️"  # Warning for not configured
             elif value and value != "Not set":
                 icon = "✅"
             else:

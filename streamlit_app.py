@@ -62,13 +62,15 @@ def render_sidebar() -> str:
             # Clear the navigation request
             StateManager.set("next_page", None)
             default_page = next_page
+            # Set widget key directly to override stored value (fixes navigation)
+            st.session_state["page_selector"] = default_page
         else:
             default_page = StateManager.get("current_page", PAGES[0])
-        
+
         # Ensure default_page is in PAGES
         if default_page not in PAGES:
             default_page = PAGES[0]
-        
+
         # Page selector
         page = st.radio(
             "Navigate to:", 

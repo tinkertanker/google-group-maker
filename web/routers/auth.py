@@ -6,13 +6,6 @@ import os
 from pathlib import Path
 from typing import Optional
 
-# Load .env before reading env vars
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
-
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates

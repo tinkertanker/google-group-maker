@@ -45,6 +45,10 @@ def get_google_service(request: Request):
     """
     Get an authenticated Google Directory API service.
     Uses credentials from environment/file.
+
+    Note: API calls are delegated to ADMIN_EMAIL/DEFAULT_EMAIL, not the
+    logged-in user. The logged-in user is for web app auth only; the service
+    account delegation requires a Google Workspace admin.
     """
     creds_result = core.load_credentials()
     if creds_result.credentials is None:
@@ -53,13 +57,8 @@ def get_google_service(request: Request):
             detail=f"Service account credentials not configured: {creds_result.error}"
         )
 
-    # Use the logged-in user's email as the delegated admin if available
-    user = get_current_user(request)
-    admin_email = None
-    if user:
-        admin_email = user.get("email")
-
-    service = core.create_service(creds_result.credentials, admin_email=admin_email)
+    # Use configured admin email for delegation (not logged-in user)
+    service = core.create_service(creds_result.credentials)
     if not service:
         raise HTTPException(
             status_code=500,

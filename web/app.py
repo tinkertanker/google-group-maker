@@ -9,6 +9,13 @@ import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+# Load environment variables BEFORE importing modules that read them
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 from fastapi import FastAPI, Request, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -20,13 +27,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from web.routers import auth, groups, members
 from web.dependencies import get_current_user, templates
-
-# Load environment variables
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
 
 
 @asynccontextmanager

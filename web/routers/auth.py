@@ -68,7 +68,11 @@ async def start_oauth(request: Request):
             detail="OAuth not configured"
         )
 
-    redirect_uri = request.url_for("auth_callback")
+    # Build redirect URI, respecting X-Forwarded-Proto from reverse proxy
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.url.netloc)
+    redirect_uri = f"{proto}://{host}/auth/callback"
+
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
 

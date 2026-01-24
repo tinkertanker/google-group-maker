@@ -1,48 +1,95 @@
 # Google Group Maker - Claude Development Guide
 
 ## Project Overview
-Google Group Maker is a tool for automating the creation and management of Google Groups using the Google Admin SDK API. Available as both CLI and web interface.
+Google Group Maker is a tool for automating the creation and management of Google Groups using the Google Admin SDK API. Available as CLI, Streamlit web interface, and FastAPI web app.
+
+## Architecture
+
+### Core Layer
+- **groupmaker_core.py**: Extracted business logic (importable module)
+  - Returns structured `OperationResult` / `ValidationResult` dataclasses
+  - No print statements - designed for programmatic use
+  - Used by CLI, Streamlit, and FastAPI apps
+
+### Interfaces
+- **groupmaker.py**: CLI wrapper using argparse
+- **streamlit_app.py**: Streamlit web interface (legacy, still supported)
+- **web/**: FastAPI web app with OAuth
 
 ## Key Components
 
 ### Core Files
-- **groupmaker.py**: Main CLI script containing all functionality
-- **streamlit_app.py**: Web interface (refactored modular version)
-- **service-account-credentials.json**: Service account credentials (not in git)
-- **requirements.txt**: Python dependencies
+- **groupmaker_core.py**: Business logic (create_service, create_group, add_member, etc.)
+- **groupmaker.py**: CLI wrapper importing from core
+- **requirements.txt**: Base Python dependencies
+- **requirements-web.txt**: FastAPI web app dependencies
 
-### Web Interface Structure
-- **streamlit_pages/**: Individual page modules (dashboard, create_group, list_groups, etc.)
+### FastAPI Web App (`web/`)
+- **app.py**: Main FastAPI application with OAuth
+- **dependencies.py**: Shared utilities (auth, service creation, flash messages)
+- **routers/**: Route handlers
+  - `auth.py`: Google OAuth login/logout
+  - `groups.py`: Group CRUD operations
+  - `members.py`: Member management
+- **templates/**: Jinja2 + htmx templates
+- **static/**: CSS/JS assets
+- **Dockerfile**: Container definition
+
+### Streamlit Interface (Legacy)
+- **streamlit_pages/**: Page modules (dashboard, create_group, list_groups, etc.)
 - **streamlit_components/**: Reusable UI components
-- **streamlit_utils/**: Utilities (state management, caching, error handling, config)
-- **web_utils.py**: API wrapper with security enhancements
+- **streamlit_utils/**: Utilities (state management, caching, error handling)
+- **web_utils.py**: API wrapper (uses subprocess - being phased out)
 - **config_utils.py**: Configuration and credentials management
 
-## Available Commands
+## Available Commands (CLI)
 1. `create` - Create a new Google Group and add members
 2. `list` - List all groups with filtering options
 3. `members` - List members of a specific group
-4. `delete` - Delete a group with confirmation
-5. `rename` - Rename an existing group
+4. `add` - Add a member to a group
+5. `remove` - Remove a member from a group
+6. `delete` - Delete a group with confirmation
+7. `rename` - Rename an existing group
 
 ## Environment Variables
-Required:
-- `DEFAULT_EMAIL` - Your default email address (required)
 
-Optional:
+### Required
+- `DEFAULT_EMAIL` - Your default email address
+
+### Optional (All Interfaces)
 - `GOOGLE_GROUP_DOMAIN` - Default domain for groups
 - `ADMIN_EMAIL` - Admin email for authentication
+- `GOOGLE_SERVICE_ACCOUNT_JSON` - Service account JSON string
+
+### Web App Only (FastAPI)
+- `GOOGLE_CLIENT_ID` - OAuth client ID
+- `GOOGLE_CLIENT_SECRET` - OAuth client secret
+- `ALLOWED_DOMAIN` - Restrict login to domain
+- `SESSION_SECRET` - Session signing key
 
 ## Development Workflow
-1. Test changes with: `./groupmaker.py [command] --debug`
-2. Use virtual environment: `source venv/bin/activate`
-3. Install dependencies: `pip install -r requirements.txt`
 
-## Important Notes
-- Service account needs domain-wide delegation
-- API calls have rate limiting (delay included)
-- Domain can be specified in group name, --domain parameter, or env variable
-- Always test with non-production groups first
+### CLI Testing
+```bash
+source venv/bin/activate
+./groupmaker.py [command] --debug
+```
+
+### Web App (FastAPI)
+```bash
+pip install -r requirements.txt -r requirements-web.txt
+uvicorn web.app:app --reload
+```
+
+### Streamlit
+```bash
+streamlit run streamlit_app.py
+```
+
+### Docker
+```bash
+docker-compose up -d
+```
 
 ## Testing Commands
 ```bash
@@ -55,45 +102,72 @@ Optional:
 # List members
 ./groupmaker.py members test-group-delete-me
 
+# Add member
+./groupmaker.py add test-group-delete-me new.member@example.com --role MEMBER
+
+# Remove member
+./groupmaker.py remove test-group-delete-me member@example.com
+
 # Delete test group
 ./groupmaker.py delete test-group-delete-me
 ```
+
+## Important Notes
+- Service account needs domain-wide delegation
+- API calls have rate limiting (delay included)
+- Domain can be specified in group name, --domain parameter, or env variable
+- Always test with non-production groups first
+- Web app uses OAuth for user auth, service account for API calls
 
 ## Error Handling
 - Authentication errors: Check service account credentials
 - Permission errors: Verify OAuth scopes and admin privileges
 - Rate limiting: Increase delay between operations if needed
+- OAuth errors: Verify client ID/secret and redirect URIs
 
 ## Code Style
-- Use Click framework for CLI
-- Include proper error handling with helpful messages
-- Add debug logging with --debug flag
+- Core module returns dataclasses, no print statements
+- CLI handles user output formatting
+- Use type hints throughout
 - Follow PEP 8 guidelines
 
-## Recent Improvements (Streamlit Frontend)
+## Data Classes (groupmaker_core.py)
+```python
+@dataclass
+class OperationResult:
+    success: bool
+    message: str
+    data: Optional[dict] = None
+    error: Optional[str] = None
 
-### Security Enhancements
-- Fixed command injection vulnerabilities in subprocess execution
-- Strengthened input validation for group names
-- Added comprehensive credentials file validation
-- Implemented secure command execution throughout
+@dataclass
+class ValidationResult:
+    valid: bool
+    group_name: Optional[str] = None
+    domain: Optional[str] = None
+    error: Optional[str] = None
 
-### Architecture
-- Refactored monolithic 800+ line file into modular components
-- Implemented centralized state management (StateManager)
-- Added proper Streamlit caching with `@st.cache_data`
-- Created reusable UI components
+@dataclass
+class CredentialsResult:
+    credentials: Optional[dict] = None
+    source: str = "missing"
+    error: Optional[str] = None
+```
 
-### Features Added
-- Web interface with all CLI functionality
-- Support for multiple trainer emails in group creation
-- Group actions available from members detail page
-- Inline delete confirmation for better UX
-- Better admin email handling with transparent display
-- Partial success handling for batch operations
+## Recent Changes
 
-### Fixes Applied
-- Fixed navigation issues with Streamlit widget keys
-- Resolved button-in-form errors
-- Fixed race conditions in state management
-- Made timeouts configurable via environment variables
+### Architecture Refactor
+- Extracted business logic from groupmaker.py to groupmaker_core.py
+- CLI now imports from core module
+- Returns structured data instead of printing directly
+
+### FastAPI Web App
+- Added modern web interface with Google OAuth
+- htmx for dynamic updates without full page reloads
+- Tailwind CSS for styling (CDN)
+- Docker support for self-hosted deployment
+
+### Streamlit (Maintained)
+- Still works for Streamlit Cloud deployment
+- Uses subprocess to call CLI (legacy approach)
+- Will continue to work on main branch

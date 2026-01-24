@@ -1,13 +1,8 @@
 #!/usr/bin/env python
 """
-Google Groups Automation Script
+Google Groups Automation CLI
 
-This script creates Google Groups and adds members automatically.
-Requirements:
-- Google Admin SDK API access
-- Service account with proper permissions
-- Python 3.6+
-- google-api-python-client, google-auth-httplib2, google-auth-oauthlib packages
+Command-line interface for managing Google Groups. Uses groupmaker_core for business logic.
 
 Usage examples:
 - Create a group: ./groupmaker.py create group-name trainer@example.com
@@ -30,79 +25,371 @@ IMPORTANT: You need a service-account-credentials.json file to use this script.
            DO NOT commit this file to Git as it contains sensitive information.
 """
 
-import os
 import argparse
-import re
-import time
 import sys
-import json
-from googleapiclient.discovery import build
-from google.oauth2 import service_account
+import time
 
 # Try to load .env file if available
 try:
     from dotenv import load_dotenv
-    load_dotenv()  # Load environment variables from .env if it exists
+    load_dotenv()
 except ImportError:
-    pass  # dotenv is optional
+    pass
 
-# Constants - configure with environment variables or use defaults
-DOMAIN = os.environ.get("GOOGLE_GROUP_DOMAIN", "tinkertanker.com")
-DEFAULT_EMAIL = os.environ.get("DEFAULT_EMAIL")
+import groupmaker_core as core
 
-# Validate that DEFAULT_EMAIL is set
-if not DEFAULT_EMAIL:
-    print("ERROR: DEFAULT_EMAIL environment variable is required.")
-    print("Please set DEFAULT_EMAIL in your .env file or environment.")
-    print("Example: DEFAULT_EMAIL=your-email@tinkertanker.com")
-    sys.exit(1)
 
-DEFAULT_ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", DEFAULT_EMAIL)
+def print_error(result: core.OperationResult) -> None:
+    """Print an operation error."""
+    print(f"ERROR: {result.message}")
+    if result.error:
+        print(f"Details: {result.error}")
 
-def _load_service_account_credentials():
-    """Load service account credentials from environment or file.
 
-    Returns:
-        Tuple of (creds_dict, source) where:
-        - creds_dict: Dictionary of credentials or None if unavailable
-        - source: 'env', 'file', 'invalid-env', 'invalid-file', or 'missing'
-    """
-    # First try to load from environment variable
-    env_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
-    if env_json:
-        try:
-            creds_dict = json.loads(env_json)
-            return creds_dict, 'env'
-        except json.JSONDecodeError as e:
-            print(f"ERROR: Invalid JSON in GOOGLE_SERVICE_ACCOUNT_JSON environment variable: {e}")
-            return None, 'invalid-env'
+def print_groups_table(groups: list) -> None:
+    """Print groups in a formatted table."""
+    if not groups:
+        print("No groups found matching your criteria.")
+        return
 
-    # Fall back to service account file
-    SERVICE_ACCOUNT_FILE = 'service-account-credentials.json'
-    if os.path.exists(SERVICE_ACCOUNT_FILE):
-        try:
-            with open(SERVICE_ACCOUNT_FILE, 'r') as f:
-                creds_dict = json.load(f)
-            return creds_dict, 'file'
-        except json.JSONDecodeError as e:
-            print(f"ERROR: Invalid JSON in {SERVICE_ACCOUNT_FILE}: {e}")
-            return None, 'invalid-file'
-        except Exception as e:
-            print(f"ERROR: Failed to read {SERVICE_ACCOUNT_FILE}: {e}")
-            return None, 'missing'
+    separator = "-" * 120
+    print(f"\nFound {len(groups)} groups:")
+    print(separator)
+    print(f"{'EMAIL ADDRESS':<40} {'NAME':<30} {'DESCRIPTION'}")
+    print(separator)
 
-    # No credentials found
-    return None, 'missing'
+    for group in groups:
+        email = group.get('email', 'N/A')
+        name = group.get('name', 'N/A')
+        description = group.get('description', '')
+        if description and len(description) > 30:
+            description = description[:27] + "..."
+        print(f"{email:<40} {name:<30} {description}")
 
-def create_service():
-    """Create and return an authorized service object for the Google Directory API."""
-    # Load credentials from available sources
-    creds_dict, source = _load_service_account_credentials()
 
-    if creds_dict is None:
-        if source == 'invalid-env':
-            print("ERROR: Credentials are invalid. Please check your configuration.")
-        elif source == 'invalid-file':
+def print_members_table(members: list, group_email: str, summary: dict) -> None:
+    """Print members in a formatted table."""
+    if not members:
+        print("No members found in this group.")
+        return
+
+    separator = "-" * 140
+    print(f"\nFound {len(members)} members in {group_email}:")
+    print(separator)
+    print(f"{'EMAIL ADDRESS':<45} {'NAME':<25} {'ROLE':<15} {'TYPE':<10} {'STATUS'}")
+    print(separator)
+
+    for member in members:
+        email = member.get('email', 'N/A')
+        role = member.get('role', 'N/A')
+        member_type = member.get('type', 'N/A')
+        status = member.get('status', 'N/A')
+
+        # Extract name from email if not provided
+        name = member.get('name', '')
+        if not name and '@' in email:
+            name_part = email.split('@')[0]
+            name = name_part.replace('.', ' ').replace('-', ' ').title()
+
+        # Mark derived members
+        if member.get('isDerivedMembership', False):
+            email = f"{email} (nested)"
+
+        # Role markers
+        role_marker = ''
+        if role == 'OWNER':
+            role_marker = '  '  # Crown emoji removed per style guide
+        elif role == 'MANAGER':
+            role_marker = '* '
+
+        print(f"{email:<45} {name:<25} {role_marker}{role:<13} {member_type:<10} {status}")
+
+    print(separator)
+    print(f"Summary: {summary['owners']} owners, {summary['managers']} managers, {summary['members']} members")
+
+
+def cmd_create(args, service, domain: str) -> None:
+    """Handle the create command."""
+    validation = core.validate_group_name(args.group_name)
+    if not validation.valid:
+        print(f"ERROR: {validation.error}")
+        print("\nUSAGE EXAMPLE:")
+        print("  ./groupmaker.py create class-a-2023 external.trainer@example.com")
+        print("  ./groupmaker.py create class-a-2023@example.com external.trainer@example.com")
+        return
+
+    group_domain = validation.domain or domain
+    group_email = f"{validation.group_name}@{group_domain}"
+
+    print(f"Creating group: {group_email}...")
+    result = core.create_group(service, validation.group_name, domain=group_domain, description=args.description)
+
+    if not result.success:
+        print_error(result)
+        print("Failed to create group. Check logs for details.")
+        return
+
+    print(result.message)
+    print("Waiting for the group to be fully created in Google's system...")
+    time.sleep(3)
+
+    if not core.ensure_group_exists(service, group_email):
+        print("Could not verify group creation. Proceeding anyway, but member addition might fail.")
+
+    # Add trainer
+    print(f"Adding trainer: {args.trainer_email}...")
+    add_result = core.add_member(service, group_email, args.trainer_email)
+    if add_result.success:
+        print(add_result.message)
+    else:
+        print_error(add_result)
+
+    # Add self unless skipped
+    if not args.skip_self:
+        print(f"Adding yourself: {args.self_email}...")
+        self_result = core.add_member(service, group_email, args.self_email)
+        if self_result.success:
+            print(self_result.message)
+        else:
+            print_error(self_result)
+
+    print(f"\nGroup setup complete. Group email: {group_email}")
+
+
+def cmd_delete(args, service, domain: str) -> None:
+    """Handle the delete command."""
+    validation = core.validate_group_name(args.group_name)
+    if not validation.valid:
+        print(f"ERROR: {validation.error}")
+        print("\nUSAGE EXAMPLE:")
+        print("  ./groupmaker.py delete class-a-2023")
+        print("  ./groupmaker.py delete class-a-2023@example.com")
+        return
+
+    group_domain = validation.domain or domain
+    group_email = f"{validation.group_name}@{group_domain}"
+
+    # Check if group exists
+    check = core.get_group(service, group_email)
+    if not check.success:
+        print(f"Error: Group {group_email} not found or cannot be accessed.")
+        if check.error:
+            print(f"Details: {check.error}")
+        return
+
+    # Confirm deletion
+    print(f"\nABOUT TO DELETE GROUP: {group_email}")
+    print("This action cannot be undone and will remove all members and content.")
+    confirmation = input("Are you sure you want to delete this group? (type 'yes' to confirm): ")
+
+    if confirmation.lower() != 'yes':
+        print("Deletion cancelled.")
+        return
+
+    result = core.delete_group(service, group_email)
+    if result.success:
+        print(result.message)
+    else:
+        print_error(result)
+
+
+def cmd_list(args, service, domain: str) -> None:
+    """Handle the list command."""
+    print(f"Fetching groups from domain: {domain}...")
+    result = core.list_groups(service, domain=domain, query=args.query, max_results=args.max_results)
+
+    if result.success:
+        print_groups_table(result.data['groups'])
+    else:
+        print_error(result)
+
+
+def cmd_members(args, service, domain: str) -> None:
+    """Handle the members command."""
+    validation = core.validate_group_name(args.group_name)
+    if not validation.valid:
+        print(f"ERROR: {validation.error}")
+        print("\nUSAGE EXAMPLE:")
+        print("  ./groupmaker.py members class-a-2023")
+        print("  ./groupmaker.py members class-a-2023@example.com")
+        return
+
+    group_domain = validation.domain or domain
+    group_email = f"{validation.group_name}@{group_domain}"
+
+    print(f"Fetching members for group: {group_email}...")
+    result = core.list_members(
+        service, group_email,
+        include_derived=args.include_derived,
+        max_results=args.max_results
+    )
+
+    if result.success:
+        print_members_table(result.data['members'], group_email, result.data['summary'])
+    else:
+        print_error(result)
+
+
+def cmd_add(args, service, domain: str) -> None:
+    """Handle the add command."""
+    validation = core.validate_group_name(args.group_name)
+    if not validation.valid:
+        print(f"ERROR: {validation.error}")
+        print("\nUSAGE EXAMPLE:")
+        print("  ./groupmaker.py add class-a-2023 new.member@example.com")
+        print("  ./groupmaker.py add class-a-2023@example.com new.member@example.com")
+        print("  ./groupmaker.py add class-a-2023 new.member@example.com --role MANAGER")
+        return
+
+    group_domain = validation.domain or domain
+    group_email = f"{validation.group_name}@{group_domain}"
+
+    # Verify group exists
+    if not core.ensure_group_exists(service, group_email):
+        print(f"Error: Group {group_email} not found or cannot be accessed.")
+        return
+
+    result = core.add_member(service, group_email, args.member_email, role=args.role)
+    if result.success:
+        print(result.message)
+    else:
+        print_error(result)
+
+
+def cmd_remove(args, service, domain: str) -> None:
+    """Handle the remove command."""
+    validation = core.validate_group_name(args.group_name)
+    if not validation.valid:
+        print(f"ERROR: {validation.error}")
+        print("\nUSAGE EXAMPLE:")
+        print("  ./groupmaker.py remove class-a-2023 member@example.com")
+        print("  ./groupmaker.py remove class-a-2023@example.com member@example.com")
+        return
+
+    group_domain = validation.domain or domain
+    group_email = f"{validation.group_name}@{group_domain}"
+
+    # Verify group exists
+    if not core.ensure_group_exists(service, group_email):
+        print(f"Error: Group {group_email} not found or cannot be accessed.")
+        return
+
+    # Validate member email
+    if not core.validate_email(args.member_email):
+        print(f"Error: Invalid email address '{args.member_email}'")
+        print("\nUSAGE EXAMPLE:")
+        print("  ./groupmaker.py remove class-a-2023 member@example.com")
+        return
+
+    result = core.remove_member(service, group_email, args.member_email)
+    if result.success:
+        print(result.message)
+    else:
+        print_error(result)
+
+
+def cmd_rename(args, service, domain: str) -> None:
+    """Handle the rename command."""
+    # Validate old group name
+    old_validation = core.validate_group_name(args.old_group_name)
+    if not old_validation.valid:
+        print(f"ERROR: {old_validation.error}")
+        print("\nUSAGE EXAMPLE:")
+        print("  ./groupmaker.py rename old-group-name new-group-name")
+        print("  ./groupmaker.py rename old-group-name@example.com new-group-name")
+        return
+
+    # Validate new group name
+    new_validation = core.validate_group_name(args.new_group_name)
+    if not new_validation.valid:
+        print(f"ERROR: {new_validation.error}")
+        print("\nUSAGE EXAMPLE:")
+        print("  ./groupmaker.py rename old-group-name new-group-name")
+        print("  ./groupmaker.py rename old-group-name new-group-name@example.com")
+        return
+
+    # Determine domain
+    group_domain = old_validation.domain or new_validation.domain or domain
+    old_email = f"{old_validation.group_name}@{group_domain}"
+
+    result = core.rename_group(service, old_email, new_validation.group_name, new_domain=group_domain)
+    if result.success:
+        print(result.message)
+    else:
+        print_error(result)
+
+
+def main():
+    # Check required environment variable
+    if not core.DEFAULT_EMAIL:
+        print("ERROR: DEFAULT_EMAIL environment variable is required.")
+        print("Please set DEFAULT_EMAIL in your .env file or environment.")
+        print("Example: DEFAULT_EMAIL=your-email@tinkertanker.com")
+        sys.exit(1)
+
+    parser = argparse.ArgumentParser(description='Create, rename, list or delete Google Groups')
+    parser.add_argument('--domain', '-d', dest='domain',
+                        help=f'Domain for the Google Group (defaults to {core.DEFAULT_DOMAIN})')
+    subparsers = parser.add_subparsers(dest='command', help='Command to execute')
+
+    # Create command
+    create_parser = subparsers.add_parser('create', help='Create a new Google Group')
+    create_parser.add_argument('group_name', help='Name for the Google Group')
+    create_parser.add_argument('trainer_email', help='Email address of the external trainer')
+    create_parser.add_argument('--skip-self', action='store_true',
+                               help='Skip adding yourself to the group')
+    create_parser.add_argument('--self-email', default=core.DEFAULT_ADMIN_EMAIL,
+                               help=f'Your email address (defaults to {core.DEFAULT_ADMIN_EMAIL})')
+    create_parser.add_argument('--description', default='',
+                               help='Optional description for the group')
+
+    # Delete command
+    delete_parser = subparsers.add_parser('delete', help='Delete an existing Google Group')
+    delete_parser.add_argument('group_name', help='Name of the Google Group to delete')
+
+    # List command
+    list_parser = subparsers.add_parser('list', help='List Google Groups in the domain')
+    list_parser.add_argument('--query', help='Search query to filter groups')
+    list_parser.add_argument('--max-results', type=int, default=100,
+                             help='Maximum number of results per page (default: 100)')
+
+    # Members command
+    members_parser = subparsers.add_parser('members', help='List members of a Google Group')
+    members_parser.add_argument('group_name', help='Name of the Google Group')
+    members_parser.add_argument('--include-derived', action='store_true',
+                                help='Include members from nested groups')
+    members_parser.add_argument('--max-results', type=int, default=100,
+                                help='Maximum number of results per page (default: 100)')
+
+    # Add member command
+    add_parser = subparsers.add_parser('add', help='Add a member to a Google Group')
+    add_parser.add_argument('group_name', help='Name of the Google Group')
+    add_parser.add_argument('member_email', help='Email address of the member to add')
+    add_parser.add_argument('--role', choices=['OWNER', 'MANAGER', 'MEMBER'], default='MEMBER',
+                            help='Role to assign (default: MEMBER)')
+
+    # Remove member command
+    remove_parser = subparsers.add_parser('remove', help='Remove a member from a Google Group')
+    remove_parser.add_argument('group_name', help='Name of the Google Group')
+    remove_parser.add_argument('member_email', help='Email address of the member to remove')
+
+    # Rename command
+    rename_parser = subparsers.add_parser('rename', help='Rename an existing Google Group')
+    rename_parser.add_argument('old_group_name', help='Current name of the Google Group')
+    rename_parser.add_argument('new_group_name', help='New name for the Google Group')
+
+    args = parser.parse_args()
+
+    if not args.command:
+        parser.print_help()
+        return
+
+    # Create the service
+    creds_result = core.load_credentials()
+    if creds_result.credentials is None:
+        if creds_result.source == 'invalid-env':
+            print("ERROR: Invalid JSON in GOOGLE_SERVICE_ACCOUNT_JSON environment variable.")
+        elif creds_result.source == 'invalid-file':
             print("ERROR: The service-account-credentials.json file contains invalid JSON.")
             print("Please re-download the credentials file from Google Cloud Console.")
         else:
@@ -111,593 +398,30 @@ def create_service():
             print("  1. GOOGLE_SERVICE_ACCOUNT_JSON environment variable (for Streamlit Cloud)")
             print("  2. service-account-credentials.json file (for local development)")
             print("Check the company Notion documentation for instructions on obtaining credentials.")
-        return None
+        sys.exit(1)
 
-    # Define scopes
-    SCOPES = [
-        'https://www.googleapis.com/auth/admin.directory.group',
-        'https://www.googleapis.com/auth/admin.directory.group.member'
-    ]
-
-    # The service account needs to be delegated for a G Suite admin user
-    DELEGATED_EMAIL = DEFAULT_ADMIN_EMAIL
-
-    # Create credentials from the dictionary
-    credentials = service_account.Credentials.from_service_account_info(
-        creds_dict, scopes=SCOPES)
-
-    # Delegate credentials
-    delegated_credentials = credentials.with_subject(DELEGATED_EMAIL)
-
-    # Build the service
-    service = build('admin', 'directory_v1', credentials=delegated_credentials)
-    return service
-
-def validate_group_name(group_name):
-    """
-    Validate that the group name is valid.
-    
-    This function accepts either:
-    - Simple group name (e.g., 'class-a-2023')
-    - Full email address (e.g., 'class-a-2023@example.com')
-    
-    Returns:
-    - If valid, returns a tuple (is_valid, group_name, domain_from_email)
-      where domain_from_email is None for simple group names
-    - If invalid, returns (False, None, None)
-    """
-    domain_from_email = None
-    
-    # Check if it's an email address and extract domain if it is
-    if '@' in group_name:
-        parts = group_name.split('@')
-        if len(parts) != 2:
-            print(f"ERROR: Invalid email format '{group_name}'.")
-            print("Email format should be 'group-name@domain.com'.")
-            return False, None, None
-        
-        group_name, domain_from_email = parts
-    
-    # Check for valid characters (letters, numbers, hyphens, underscores, periods)
-    if not re.match(r'^[a-zA-Z0-9.\-_]+$', group_name):
-        print(f"ERROR: Group name '{group_name}' contains invalid characters.")
-        print("Group names can only contain letters, numbers, periods, hyphens, and underscores.")
-        return False, None, None
-    
-    return True, group_name, domain_from_email
-
-def validate_email(email):
-    """
-    Validate that an email address is valid.
-
-    Args:
-        email: Email address to validate
-
-    Returns:
-        True if valid, False otherwise
-    """
-    return bool(re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email))
-
-def create_group(service, group_name, group_description="", domain=None):
-    """Create a new Google Group."""
-    # Use provided domain or default
-    domain_to_use = domain or DOMAIN
-    email = f"{group_name}@{domain_to_use}"
-    
-    group_body = {
-        "email": email,
-        "name": group_name,
-        "description": group_description,
-        # Setting basic permissions: only members can post
-        "allowExternalMembers": True,
-        "whoCanJoin": "INVITED_CAN_JOIN",
-        "whoCanViewMembership": "ALL_MANAGERS_CAN_VIEW",
-        "whoCanViewGroup": "ALL_MEMBERS_CAN_VIEW",
-        "whoCanPostMessage": "ALL_MEMBERS_CAN_POST",
-        "allowWebPosting": True,
-        "includeInGlobalAddressList": True
-    }
-    
-    try:
-        result = service.groups().insert(body=group_body).execute()
-        print(f"Group '{email}' created successfully!")
-        return result
-    except Exception as e:
-        print(f"Error creating group: {e}")
-        return None
-
-def add_member(service, group_email, member_email, role="MEMBER", retry=True):
-    """Add a member to the specified Google Group."""
-    member_body = {
-        "email": member_email,
-        "role": role,  # Options: OWNER, MANAGER, MEMBER
-        "delivery_settings": "ALL_MAIL"  # Ensure they receive all emails
-    }
-    
-    try:
-        result = service.members().insert(
-            groupKey=group_email,
-            body=member_body
-        ).execute()
-        print(f"Added {member_email} to {group_email} as {role}")
-        return result
-    except Exception as e:
-        if retry and "Resource Not Found: groupKey" in str(e):
-            print(f"Group not found yet. Waiting a moment before retrying...")
-            # Wait a moment for the group to propagate
-            time.sleep(5)
-            return add_member(service, group_email, member_email, role, retry=False)
-        else:
-            print(f"Error adding member: {e}")
-            print(f"HINT: If the error mentions 'groupKey', the group may still be propagating in Google's system.")
-            return None
-
-def remove_member(service, group_email, member_email):
-    """Remove a member from a Google Group."""
-    try:
-        service.members().delete(
-            groupKey=group_email,
-            memberKey=member_email
-        ).execute()
-        print(f"Removed {member_email} from {group_email}")
-        return True
-    except Exception as e:
-        error_str = str(e)
-        if "Resource Not Found" in error_str:
-            if "memberKey" in error_str:
-                print(f"Error: {member_email} is not a member of {group_email}")
-            else:
-                print(f"Error: Group {group_email} not found")
-        else:
-            print(f"Error removing member: {e}")
-        return False
-
-def ensure_group_exists(service, group_email, max_attempts=3, delay=3):
-    """Check if a group exists and wait for it to be available."""
-    for attempt in range(max_attempts):
-        try:
-            group = service.groups().get(groupKey=group_email).execute()
-            print(f"Confirmed group exists: {group_email}")
-            return True
-        except Exception as e:
-            if "Resource Not Found" in str(e) and attempt < max_attempts - 1:
-                print(f"Group not found yet (attempt {attempt+1}/{max_attempts}). Waiting {delay} seconds...")
-                time.sleep(delay)
-            else:
-                print(f"Error checking group: {e}")
-                return False
-
-    return False
-
-def delete_group(service, group_email):
-    """Delete a Google Group after confirmation."""
-    # First check if the group exists
-    try:
-        service.groups().get(groupKey=group_email).execute()
-    except Exception as e:
-        print(f"Error: Group {group_email} not found or cannot be accessed.")
-        print(f"Details: {e}")
-        return False
-    
-    # Ask for confirmation
-    print(f"\nABOUT TO DELETE GROUP: {group_email}")
-    print("This action cannot be undone and will remove all members and content.")
-    confirmation = input("Are you sure you want to delete this group? (type 'yes' to confirm): ")
-    
-    if confirmation.lower() != 'yes':
-        print("Deletion cancelled.")
-        return False
-    
-    # Proceed with deletion
-    try:
-        service.groups().delete(groupKey=group_email).execute()
-        print(f"Group {group_email} has been successfully deleted.")
-        return True
-    except Exception as e:
-        print(f"Error deleting group: {e}")
-        return False
-
-def list_groups(service, domain=DOMAIN, query=None, max_results=100):
-    """List Google Groups in the domain with optional filtering."""
-    groups = []
-    page_token = None
-    
-    print(f"Fetching groups from domain: {domain}...")
-    
-    try:
-        while True:
-            # Prepare request parameters
-            params = {
-                'domain': domain,
-                'maxResults': max_results
-            }
-            
-            # Add page token if we're on subsequent pages
-            if page_token:
-                params['pageToken'] = page_token
-            
-            # Execute the API request to list groups
-            results = service.groups().list(**params).execute()
-            
-            # Add groups from this page to our collection
-            if 'groups' in results:
-                # If a query is provided, filter the results locally
-                if query:
-                    filtered_groups = [
-                        group for group in results['groups']
-                        if (query.lower() in group.get('email', '').lower() or
-                            query.lower() in group.get('name', '').lower() or
-                            query.lower() in group.get('description', '').lower())
-                    ]
-                    groups.extend(filtered_groups)
-                else:
-                    groups.extend(results['groups'])
-                
-            # Check if there are more pages
-            page_token = results.get('nextPageToken')
-            if not page_token:
-                break
-        
-        # Print results in a formatted way
-        if groups:
-            separator_line = "-" * 120
-            print(f"\nFound {len(groups)} groups:")
-            print(separator_line)
-            print(f"{'EMAIL ADDRESS':<40} {'NAME':<30} {'DESCRIPTION'}")
-            print(separator_line)
-            
-            for group in groups:
-                email = group.get('email', 'N/A')
-                name = group.get('name', 'N/A')
-                description = group.get('description', '')
-                
-                # Truncate long descriptions for display
-                if description and len(description) > 30:
-                    description = description[:27] + "..."
-                    
-                print(f"{email:<40} {name:<30} {description}")
-        else:
-            print("No groups found matching your criteria.")
-            
-        return groups
-            
-    except Exception as e:
-        print(f"Error listing groups: {e}")
-        return []
-
-def list_members(service, group_email, include_derived_membership=False, max_results=100):
-    """List members of a Google Group with optional parameters."""
-    members = []
-    page_token = None
-    
-    print(f"Fetching members for group: {group_email}...")
-    
-    try:
-        while True:
-            # Prepare request parameters
-            params = {
-                'groupKey': group_email,
-                'maxResults': max_results,
-                'includeDerivedMembership': include_derived_membership
-            }
-            
-            # Add page token if we're on subsequent pages
-            if page_token:
-                params['pageToken'] = page_token
-            
-            # Execute the API request to list members
-            results = service.members().list(**params).execute()
-            
-            # Add members from this page to our collection
-            if 'members' in results:
-                members.extend(results['members'])
-                
-            # Check if there are more pages
-            page_token = results.get('nextPageToken')
-            if not page_token:
-                break
-        
-        # Sort members by role (OWNER first, then MANAGER, then MEMBER)
-        role_order = {'OWNER': 0, 'MANAGER': 1, 'MEMBER': 2}
-        members.sort(key=lambda m: (role_order.get(m.get('role', 'MEMBER'), 3), m.get('email', '')))
-        
-        # Print results in a formatted way
-        if members:
-            separator_line = "-" * 140
-            print(f"\nFound {len(members)} members in {group_email}:")
-            print(separator_line)
-            print(f"{'EMAIL ADDRESS':<45} {'NAME':<25} {'ROLE':<15} {'TYPE':<10} {'STATUS'}")
-            print(separator_line)
-            
-            for member in members:
-                email = member.get('email', 'N/A')
-                role = member.get('role', 'N/A')
-                member_type = member.get('type', 'N/A')
-                status = member.get('status', 'N/A')
-                
-                # Extract name if available (try to get from email if not provided separately)
-                name = member.get('name', '')
-                if not name and '@' in email:
-                    # Extract name part from email address
-                    name_part = email.split('@')[0]
-                    # Replace dots and dashes with spaces for better readability
-                    name = name_part.replace('.', ' ').replace('-', ' ').title()
-                
-                # Highlight derived members if they're included
-                derived = member.get('isDerivedMembership', False)
-                if derived:
-                    email = f"{email} (nested)"
-                
-                # Highlight different roles with markers
-                role_marker = ''
-                if role == 'OWNER':
-                    role_marker = '👑 '
-                elif role == 'MANAGER':
-                    role_marker = '⭐ '
-                    
-                print(f"{email:<45} {name:<25} {role_marker}{role:<13} {member_type:<10} {status}")
-            
-            # Print summary
-            print(separator_line)
-            owners = sum(1 for m in members if m.get('role') == 'OWNER')
-            managers = sum(1 for m in members if m.get('role') == 'MANAGER')
-            regular_members = sum(1 for m in members if m.get('role') == 'MEMBER')
-            print(f"Summary: {owners} owners, {managers} managers, {regular_members} members")
-            
-        else:
-            print("No members found in this group.")
-            
-        return members
-            
-    except Exception as e:
-        print(f"Error listing members: {e}")
-        return []
-
-def main():
-    # Set up command line arguments
-    parser = argparse.ArgumentParser(description='Create, rename, list or delete Google Groups')
-    parser.add_argument('--domain', '-d', dest='domain',
-                        help=f'Domain for the Google Group (defaults to {DOMAIN})')
-    subparsers = parser.add_subparsers(dest='command', help='Command to execute')
-    
-    # Create command
-    create_parser = subparsers.add_parser('create', help='Create a new Google Group')
-    create_parser.add_argument('group_name', help='Name for the Google Group (e.g., "class-a-2023" or "class-a-2023@example.com")')
-    create_parser.add_argument('trainer_email', help='Email address of the external trainer')
-    create_parser.add_argument('--skip-self', action='store_true', 
-                        help='Skip adding yourself to the group')
-    create_parser.add_argument('--self-email', default=DEFAULT_ADMIN_EMAIL,
-                        help=f'Your email address (defaults to {DEFAULT_ADMIN_EMAIL})')
-    create_parser.add_argument('--description', default='',
-                        help='Optional description for the group')
-    
-    # Delete command
-    delete_parser = subparsers.add_parser('delete', help='Delete an existing Google Group')
-    delete_parser.add_argument('group_name', help='Name of the Google Group to delete (e.g., "class-a-2023" or "class-a-2023@example.com")')
-    
-    # List command
-    list_parser = subparsers.add_parser('list', help='List Google Groups in the domain')
-    list_parser.add_argument('--query', help='Search query to filter groups (e.g., "class" to find all class groups)')
-    list_parser.add_argument('--max-results', type=int, default=100, 
-                      help='Maximum number of results to return per page (default: 100)')
-    
-    # Members command
-    members_parser = subparsers.add_parser('members', help='List members of a Google Group')
-    members_parser.add_argument('group_name', help='Name of the Google Group to list members from (e.g., "class-a-2023" or "class-a-2023@example.com")')
-    members_parser.add_argument('--include-derived', action='store_true',
-                          help='Include members from nested groups')
-    members_parser.add_argument('--max-results', type=int, default=100,
-                          help='Maximum number of results to return per page (default: 100)')
-
-    # Add member command
-    add_parser = subparsers.add_parser('add', help='Add a member to a Google Group')
-    add_parser.add_argument('group_name', help='Name of the Google Group to add a member to (e.g., "class-a-2023" or "class-a-2023@example.com")')
-    add_parser.add_argument('member_email', help='Email address of the member to add')
-    add_parser.add_argument('--role', choices=['OWNER', 'MANAGER', 'MEMBER'], default='MEMBER',
-                      help='Role to assign to the member (default: MEMBER)')
-
-    # Remove member command
-    remove_parser = subparsers.add_parser('remove', help='Remove a member from a Google Group')
-    remove_parser.add_argument('group_name', help='Name of the Google Group to remove a member from (e.g., "class-a-2023" or "class-a-2023@example.com")')
-    remove_parser.add_argument('member_email', help='Email address of the member to remove')
-
-    # Rename command
-    rename_parser = subparsers.add_parser('rename', help='Rename an existing Google Group')
-    rename_parser.add_argument('old_group_name', help='Current name of the Google Group (e.g., "class-a-2023" or "class-a-2023@example.com")')
-    rename_parser.add_argument('new_group_name', help='New name for the Google Group (e.g., "class-b-2023" or "class-b-2023@example.com")')
-    
-    args = parser.parse_args()
-    
-    # If no command is specified, show help
-    if not args.command:
-        parser.print_help()
-        return
-    
-    # Create the service
-    service = create_service()
+    service = core.create_service(creds_result.credentials)
     if not service:
-        return
-    
-    # Use the domain from command line if specified, otherwise use default
-    domain = args.domain or DOMAIN
-    
-    if args.command == 'create':
-        # Validate the group_name
-        is_valid, group_name, email_domain = validate_group_name(args.group_name)
-        if not is_valid:
-            print("\nUSAGE EXAMPLE:")
-            print(f"  ./groupmaker.py create class-a-2023 external.trainer@example.com")
-            print(f"  ./groupmaker.py create class-a-2023@example.com external.trainer@example.com")
-            return
-        
-        # Use domain from email if provided, otherwise use command line parameter or default
-        group_domain = email_domain or domain
-        
-        # Create the Google Group
-        group_email = f"{group_name}@{group_domain}"
-        print(f"Creating group: {group_email}...")
-        group = create_group(service, group_name, args.description, domain=group_domain)
-        
-        if group:
-            # Wait a moment for the group to propagate through Google's system
-            print("Waiting for the group to be fully created in Google's system...")
-            time.sleep(3)
-            
-            # Verify the group exists before proceeding
-            if not ensure_group_exists(service, group_email):
-                print("Could not verify group creation. Proceeding anyway, but member addition might fail.")
-            
-            # Add the external trainer
-            print(f"Adding trainer: {args.trainer_email}...")
-            add_member(service, group_email, args.trainer_email)
-            
-            # Add yourself by default unless --skip-self is specified
-            if not args.skip_self:
-                print(f"Adding yourself: {args.self_email}...")
-                add_member(service, group_email, args.self_email)
-            
-            print(f"\nGroup setup complete. Group email: {group_email}")
-        else:
-            print("Failed to create group. Check logs for details.")
-            
-    elif args.command == 'delete':
-        # Validate the group_name
-        is_valid, group_name, email_domain = validate_group_name(args.group_name)
-        if not is_valid:
-            print("\nUSAGE EXAMPLE:")
-            print(f"  ./groupmaker.py delete class-a-2023")
-            print(f"  ./groupmaker.py delete class-a-2023@example.com")
-            return
-        
-        # Use domain from email if provided, otherwise use command line parameter or default
-        group_domain = email_domain or domain
-        
-        # Delete the Google Group
-        group_email = f"{group_name}@{group_domain}"
-        delete_group(service, group_email)
-    
-    elif args.command == 'list':
-        # List Google Groups in the domain with optional filtering
-        list_groups(service, domain=domain, query=args.query, max_results=args.max_results)
-    
-    elif args.command == 'members':
-        # Validate the group_name
-        is_valid, group_name, email_domain = validate_group_name(args.group_name)
-        if not is_valid:
-            print("\nUSAGE EXAMPLE:")
-            print(f"  ./groupmaker.py members class-a-2023")
-            print(f"  ./groupmaker.py members class-a-2023@example.com")
-            return
-        
-        # Use domain from email if provided, otherwise use command line parameter or default
-        group_domain = email_domain or domain
-        
-        # List members of the Google Group
-        group_email = f"{group_name}@{group_domain}"
-        list_members(service, group_email, include_derived_membership=args.include_derived, max_results=args.max_results)
-    
-    elif args.command == 'add':
-        # Validate the group_name
-        is_valid, group_name, email_domain = validate_group_name(args.group_name)
-        if not is_valid:
-            print("\nUSAGE EXAMPLE:")
-            print(f"  ./groupmaker.py add class-a-2023 new.member@example.com")
-            print(f"  ./groupmaker.py add class-a-2023@example.com new.member@example.com")
-            print(f"  ./groupmaker.py add class-a-2023 new.member@example.com --role MANAGER")
-            return
+        print("ERROR: Failed to create Google Directory API service.")
+        sys.exit(1)
 
-        # Use domain from email if provided, otherwise use command line parameter or default
-        group_domain = email_domain or domain
+    domain = args.domain or core.DEFAULT_DOMAIN
 
-        # Add member to the Google Group
-        group_email = f"{group_name}@{group_domain}"
+    # Dispatch to command handlers
+    commands = {
+        'create': cmd_create,
+        'delete': cmd_delete,
+        'list': cmd_list,
+        'members': cmd_members,
+        'add': cmd_add,
+        'remove': cmd_remove,
+        'rename': cmd_rename,
+    }
 
-        # Verify the group exists before proceeding
-        if not ensure_group_exists(service, group_email):
-            print(f"Error: Group {group_email} not found or cannot be accessed.")
-            return
+    handler = commands.get(args.command)
+    if handler:
+        handler(args, service, domain)
 
-        # Add the member
-        add_member(service, group_email, args.member_email, role=args.role)
-
-    elif args.command == 'remove':
-        # Validate the group_name
-        is_valid, group_name, email_domain = validate_group_name(args.group_name)
-        if not is_valid:
-            print("\nUSAGE EXAMPLE:")
-            print(f"  ./groupmaker.py remove class-a-2023 member@example.com")
-            print(f"  ./groupmaker.py remove class-a-2023@example.com member@example.com")
-            return
-
-        # Use domain from email if provided, otherwise use command line parameter or default
-        group_domain = email_domain or domain
-
-        # Remove member from the Google Group
-        group_email = f"{group_name}@{group_domain}"
-
-        # Verify the group exists before proceeding
-        if not ensure_group_exists(service, group_email):
-            print(f"Error: Group {group_email} not found or cannot be accessed.")
-            return
-
-        # Validate member email
-        if not validate_email(args.member_email):
-            print(f"Error: Invalid email address '{args.member_email}'")
-            print("\nUSAGE EXAMPLE:")
-            print(f"  ./groupmaker.py remove class-a-2023 member@example.com")
-            return
-
-        # Remove the member
-        remove_member(service, group_email, args.member_email)
-
-    elif args.command == 'rename':
-        # Validate old group name
-        is_valid_old, old_group_name, old_email_domain = validate_group_name(args.old_group_name)
-        if not is_valid_old:
-            print("\nUSAGE EXAMPLE:")
-            print(f"  ./groupmaker.py rename old-group-name new-group-name")
-            print(f"  ./groupmaker.py rename old-group-name@example.com new-group-name")
-            return
-            
-        # Validate new group name
-        is_valid_new, new_group_name, new_email_domain = validate_group_name(args.new_group_name)
-        if not is_valid_new:
-            print("\nUSAGE EXAMPLE:")
-            print(f"  ./groupmaker.py rename old-group-name new-group-name")
-            print(f"  ./groupmaker.py rename old-group-name new-group-name@example.com")
-            return
-        
-        # Determine which domain to use (prioritize email domains)
-        group_domain = old_email_domain or new_email_domain or domain
-        
-        old_group_email = f"{old_group_name}@{group_domain}"
-        new_group_email = f"{new_group_name}@{group_domain}"
-        
-        # Check if old group exists
-        if not ensure_group_exists(service, old_group_email):
-            print(f"Error: Group {old_group_email} not found.")
-            return
-        
-        # Check if new group name already exists
-        if ensure_group_exists(service, new_group_email):
-            print(f"Error: Group {new_group_email} already exists.")
-            return
-        
-        # Get current group settings
-        try:
-            group = service.groups().get(groupKey=old_group_email).execute()
-            
-            # Update group settings
-            group['email'] = new_group_email
-            group['name'] = args.new_group_name
-            
-            # Update the group
-            service.groups().update(groupKey=old_group_email, body=group).execute()
-            print(f"Successfully renamed group from {old_group_email} to {new_group_email}")
-            
-        except Exception as e:
-            print(f"Error renaming group: {e}")
-            return
 
 if __name__ == "__main__":
     main()

@@ -1,6 +1,76 @@
 # Google Group Maker
 
-A command-line utility for automating the creation and management of Google Groups.
+A tool for automating the creation and management of Google Groups. Available as CLI, Streamlit web interface, and a modern FastAPI web app with OAuth.
+
+## Deployment Options
+
+| Option | Best For | Auth | Setup |
+|--------|----------|------|-------|
+| **FastAPI Web App** | Self-hosted Docker | Google OAuth | [Docker Setup](#docker-deployment) |
+| **Streamlit Cloud** | Quick deployment | None (service account only) | [Streamlit Setup](#quick-start-streamlit-web-interface) |
+| **CLI** | Automation/scripting | Service account | [CLI Setup](#command-line-interface) |
+
+---
+
+## Docker Deployment (Recommended)
+
+The FastAPI web app provides Google OAuth authentication and a modern interface.
+
+### Prerequisites
+- Docker and Docker Compose
+- Google Cloud project with OAuth credentials
+- Service account with domain-wide delegation
+
+### Quick Start
+
+1. **Clone and configure:**
+   ```bash
+   git clone <repository-url>
+   cd google-group-maker
+   cp .env.example .env
+   # Edit .env with your configuration
+   ```
+
+2. **Set up OAuth credentials** (see [OAuth Setup Guide](#oauth-setup))
+
+3. **Run with Docker Compose:**
+   ```bash
+   docker-compose up -d
+   ```
+
+4. **Access:** http://localhost:8000
+
+### OAuth Setup
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+2. Create OAuth 2.0 Client ID (Web application)
+3. Add authorised redirect URI: `http://localhost:8000/auth/callback`
+4. Copy Client ID and Secret to `.env`:
+   ```
+   GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+   GOOGLE_CLIENT_SECRET=your-client-secret
+   ```
+
+5. Optionally restrict to your domain:
+   ```
+   ALLOWED_DOMAIN=yourdomain.com
+   ```
+
+### Environment Variables (Web App)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GOOGLE_CLIENT_ID` | Yes | OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | Yes | OAuth client secret |
+| `SESSION_SECRET` | Yes | Random string for session signing |
+| `DEFAULT_EMAIL` | Yes | Default admin email |
+| `ALLOWED_DOMAIN` | No | Restrict login to domain |
+| `GOOGLE_GROUP_DOMAIN` | No | Default domain for groups |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | No* | Service account JSON string |
+
+*Either `GOOGLE_SERVICE_ACCOUNT_JSON` or a mounted `service-account-credentials.json` file is required.
+
+---
 
 ## Quick Start (Streamlit Web Interface)
 

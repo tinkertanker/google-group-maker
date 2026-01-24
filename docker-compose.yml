@@ -1,0 +1,50 @@
+# Google Group Maker - Docker Compose Configuration
+# Usage: docker-compose up -d
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      # OAuth configuration (required)
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - SESSION_SECRET=${SESSION_SECRET:-change-me-in-production}
+
+      # Domain restrictions
+      - ALLOWED_DOMAIN=${ALLOWED_DOMAIN:-}
+      - GOOGLE_GROUP_DOMAIN=${GOOGLE_GROUP_DOMAIN:-tinkertanker.com}
+
+      # Admin configuration
+      - DEFAULT_EMAIL=${DEFAULT_EMAIL}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-}
+
+      # Service account credentials (option 1: JSON string)
+      - GOOGLE_SERVICE_ACCOUNT_JSON=${GOOGLE_SERVICE_ACCOUNT_JSON:-}
+    volumes:
+      # Service account credentials (option 2: file mount)
+      - ./service-account-credentials.json:/app/service-account-credentials.json:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+# Example with Traefik reverse proxy (uncomment to use)
+# services:
+#   web:
+#     labels:
+#       - "traefik.enable=true"
+#       - "traefik.http.routers.groupmaker.rule=Host(`groups.example.com`)"
+#       - "traefik.http.routers.groupmaker.tls.certresolver=letsencrypt"
+#     networks:
+#       - traefik
+#
+# networks:
+#   traefik:
+#     external: true

@@ -1,7 +1,7 @@
 # Google Group Maker - Claude Development Guide
 
 ## Project Overview
-Google Group Maker is a tool for automating the creation and management of Google Groups using the Google Admin SDK API. Available as CLI, Streamlit web interface, and FastAPI web app.
+Google Group Maker is a tool for automating the creation and management of Google Groups using the Google Admin SDK API. Available as a CLI and a FastAPI web app.
 
 ## Architecture
 
@@ -9,11 +9,10 @@ Google Group Maker is a tool for automating the creation and management of Googl
 - **groupmaker_core.py**: Extracted business logic (importable module)
   - Returns structured `OperationResult` / `ValidationResult` dataclasses
   - No print statements - designed for programmatic use
-  - Used by CLI, Streamlit, and FastAPI apps
+  - Used by CLI and FastAPI apps
 
 ### Interfaces
 - **groupmaker.py**: CLI wrapper using argparse
-- **streamlit_app.py**: Streamlit web interface (legacy, still supported)
 - **web/**: FastAPI web app with OAuth
 
 ## Key Components
@@ -29,18 +28,11 @@ Google Group Maker is a tool for automating the creation and management of Googl
 - **dependencies.py**: Shared utilities (auth, service creation, flash messages)
 - **routers/**: Route handlers
   - `auth.py`: Google OAuth login/logout
-  - `groups.py`: Group CRUD operations
+  - `groups.py`: Group CRUD operations and inline editing
   - `members.py`: Member management
 - **templates/**: Jinja2 + htmx templates
 - **static/**: CSS/JS assets
 - **Dockerfile**: Container definition
-
-### Streamlit Interface (Legacy)
-- **streamlit_pages/**: Page modules (dashboard, create_group, list_groups, etc.)
-- **streamlit_components/**: Reusable UI components
-- **streamlit_utils/**: Utilities (state management, caching, error handling)
-- **web_utils.py**: API wrapper (uses subprocess - being phased out)
-- **config_utils.py**: Configuration and credentials management
 
 ## Available Commands (CLI)
 1. `create` - Create a new Google Group and add members
@@ -79,11 +71,6 @@ source venv/bin/activate
 ```bash
 pip install -r requirements.txt -r requirements-web.txt
 uvicorn web.app:app --reload
-```
-
-### Streamlit
-```bash
-streamlit run streamlit_app.py
 ```
 
 ### Docker
@@ -167,7 +154,6 @@ class CredentialsResult:
 - Tailwind CSS for styling (CDN)
 - Docker support for self-hosted deployment
 
-### Streamlit (Maintained)
-- Still works for Streamlit Cloud deployment
-- Uses subprocess to call CLI (legacy approach)
-- Will continue to work on main branch
+### Current State
+- Streamlit support has been removed from the repository
+- The supported interfaces are now the CLI and the FastAPI web app

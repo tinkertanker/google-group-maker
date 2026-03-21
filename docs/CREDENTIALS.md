@@ -1,293 +1,128 @@
-# Google Service Account Credentials Setup
+# Google Credentials Setup
 
-This guide covers how to configure Google Service Account credentials for the Google Group Maker application.
+Google Group Maker uses two kinds of Google credentials:
 
-## Overview
+1. A **service account** for Google Admin SDK calls
+2. An **OAuth client** for FastAPI web login
 
-The application supports multiple credential sources in priority order:
+## Service Account Setup
 
-1. **Streamlit Secrets** (Recommended) - Cloud-ready, encrypted storage
-2. **Local Secrets File** (`.streamlit/secrets.toml`) - For local development
-3. **Legacy JSON File** (`service-account-credentials.json`) - Fallback for CLI/local dev
+The CLI and web app both need a service account with domain-wide delegation.
 
-**Why Streamlit Secrets?**
-- ✅ Works on Streamlit Cloud (persistent, encrypted)
-- ✅ Never committed to Git
-- ✅ Same format for local and cloud deployment
-- ✅ Integrated with Streamlit's security model
+### 1. Create a service account
 
-## Quick Start
+1. Open the [Google Cloud Console](https://console.cloud.google.com)
+2. Create or select a project
+3. Enable the **Admin SDK API**
+4. Create a service account
+5. Generate a JSON key and download it
 
-### Option 1: Streamlit Secrets (Recommended)
+### 2. Enable domain-wide delegation
 
-#### For Local Development
+In the Google Workspace Admin console:
 
-1. **Copy the example file:**
-   ```bash
-   cp .streamlit/secrets.toml.example .streamlit/secrets.toml
-   ```
+1. Go to **Security → API controls → Domain-wide Delegation**
+2. Add the service account client ID
+3. Grant these scopes:
+   - `https://www.googleapis.com/auth/admin.directory.group`
+   - `https://www.googleapis.com/auth/admin.directory.group.member`
 
-2. **Edit `.streamlit/secrets.toml`** with your service account credentials:
-   ```toml
-   [google_service_account]
-   type = "service_account"
-   project_id = "your-project-123"
-   private_key_id = "abc123..."
-   private_key = """-----BEGIN PRIVATE KEY-----
-   Your actual private key here...
-   -----END PRIVATE KEY-----
-   """
-   client_email = "your-sa@your-project.iam.gserviceaccount.com"
-   # ... other fields
-   ```
+### 3. Provide the credentials to the app
 
-3. **The file is automatically gitignored** - safe from accidental commits
+Use either of these approaches:
 
-4. **Run the app:**
-   ```bash
-   streamlit run streamlit_app.py
-   ```
+#### Option A: JSON file in the project root
 
-#### For Streamlit Cloud
-
-1. **Prepare your credentials:**
-   - Go to the app's **Settings** page
-   - Upload your service account JSON file
-   - Click "📋 Copy for Streamlit Cloud"
-
-2. **Configure in Streamlit Cloud:**
-   - Go to [share.streamlit.io](https://share.streamlit.io)
-   - Open your app
-   - Click **Settings** (⚙️) → **Secrets**
-   - Paste the TOML configuration
-   - Click **Save**
-   - Reboot the app
-
-3. **Verify:**
-   - App should load credentials automatically
-   - Test authentication in Settings or Dashboard
-
-### Option 2: Legacy JSON File (CLI/Local Only)
-
-⚠️ **Warning:** This method does NOT work on Streamlit Cloud (files don't persist)
-
-1. **Place your JSON file:**
-   ```bash
-   cp /path/to/your/credentials.json service-account-credentials.json
-   ```
-
-2. **The app will use it as a fallback** if secrets aren't configured
-
-3. **For CLI usage:**
-   ```bash
-   ./groupmaker.py list
-   ```
-
-## Obtaining Service Account Credentials
-
-If you don't have a service account yet:
-
-1. **Go to [Google Cloud Console](https://console.cloud.google.com)**
-
-2. **Create/Select a Project**
-
-3. **Enable APIs:**
-   - Admin SDK API
-   - Google Groups API
-
-4. **Create Service Account:**
-   - IAM & Admin → Service Accounts → Create
-   - Grant necessary permissions
-   - Create a key (JSON format)
-   - Download the JSON file
-
-5. **Domain-wide Delegation:**
-   - In Google Workspace Admin Console
-   - Security → API Controls → Domain-wide Delegation
-   - Add your service account client ID
-   - Grant scopes:
-     - `https://www.googleapis.com/auth/admin.directory.group`
-     - `https://www.googleapis.com/auth/admin.directory.group.member`
-
-For detailed Google Cloud setup, check your organization's internal documentation.
-
-## Migration Guide
-
-### From JSON File to Streamlit Secrets
-
-If you're currently using `service-account-credentials.json`:
-
-1. **Open the Streamlit app** and go to **⚙️ Settings**
-
-2. **In the "Streamlit Secrets" tab:**
-   - Upload your existing JSON file
-   - Review the preview
-   - Click "💾 Save to Local Secrets"
-
-3. **For Streamlit Cloud:**
-   - Use the "📋 Copy for Streamlit Cloud" button
-   - Paste into Streamlit Cloud Secrets UI
-
-4. **Verify the migration:**
-   - Check Dashboard → Configuration Summary
-   - Should show "Credentials Source: Streamlit Secrets"
-
-5. **Optional: Remove the old JSON file:**
-   ```bash
-   rm service-account-credentials.json
-   ```
-   (Keep a backup copy somewhere safe, outside the repo)
-
-### From Streamlit Cloud Environment Variables
-
-If you previously used environment variables:
-
-1. The new secrets format is more secure and easier to manage
-2. Follow the "For Streamlit Cloud" setup above
-3. Remove old environment variables after verifying secrets work
-
-## Credential Sources: How It Works
-
-The application checks credentials in this order:
-
-```
-1. Streamlit Runtime Secrets (st.secrets["google_service_account"])
-   ↓ (if not found)
-2. Local Secrets File (.streamlit/secrets.toml)
-   ↓ (if not found)
-3. JSON File (service-account-credentials.json)
-   ↓ (if not found)
-4. Error: No credentials configured
+```bash
+cp service-account-credentials.example.json service-account-credentials.json
 ```
 
-**For CLI commands** (`./groupmaker.py`):
-- The Streamlit app passes credentials via environment variables
-- CLI can also read from `service-account-credentials.json` directly
+Then replace the example values with your real service account JSON.
 
-**Credential validation:**
-- All sources are validated for required fields
-- Invalid credentials trigger clear error messages
-- Private key format is checked
+#### Option B: Environment variable
+
+Add this to `.env`:
+
+```bash
+GOOGLE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
+```
+
+## OAuth Setup for the Web App
+
+The FastAPI app also needs a Google OAuth client.
+
+1. Open [Google Cloud Console → Credentials](https://console.cloud.google.com/apis/credentials)
+2. Create an **OAuth 2.0 Client ID** for a **Web application**
+3. Add authorised redirect URIs:
+   - `http://localhost:8000/auth/callback`
+   - `https://your-domain.com/auth/callback`
+4. Add these values to `.env`:
+
+```bash
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-client-secret
+SESSION_SECRET=replace-me
+```
+
+Optional:
+
+```bash
+ALLOWED_DOMAIN=yourdomain.com
+```
+
+## Required Environment Variables
+
+### Shared
+
+| Variable | Description |
+| --- | --- |
+| `DEFAULT_EMAIL` | Default email used for delegation |
+| `ADMIN_EMAIL` | Optional explicit admin email; defaults to `DEFAULT_EMAIL` |
+| `GOOGLE_GROUP_DOMAIN` | Optional default group domain |
+
+### Web App Only
+
+| Variable | Description |
+| --- | --- |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
+| `SESSION_SECRET` | Session signing secret |
+| `ALLOWED_DOMAIN` | Optional login restriction |
+
+## Verifying the Setup
+
+### CLI
+
+```bash
+./groupmaker.py list
+```
+
+### Web App
+
+```bash
+uvicorn web.app:app --reload
+```
+
+Then visit `http://localhost:8000` and log in.
 
 ## Troubleshooting
 
-### "No credentials configured"
+### Service account errors
 
-**Cause:** No valid credentials found in any source
+- Confirm the Admin SDK API is enabled
+- Confirm domain-wide delegation is configured
+- Confirm `DEFAULT_EMAIL` or `ADMIN_EMAIL` belongs to a Google Workspace admin
+- Check that the JSON key is valid and complete
 
-**Solution:**
-1. Check if `.streamlit/secrets.toml` exists and contains `[google_service_account]`
-2. Verify `service-account-credentials.json` exists (fallback)
-3. On Streamlit Cloud, check App Settings → Secrets
+### OAuth errors
 
-### "Invalid JSON format"
+- `redirect_uri_mismatch`: fix the authorised redirect URIs in Google Cloud Console
+- `access_denied`: check `ALLOWED_DOMAIN` and the Google account used to sign in
+- `OAuth not configured`: set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
 
-**Cause:** Malformed JSON in uploaded file or secrets
+## Security Notes
 
-**Solution:**
-1. Validate JSON using a JSON validator
-2. Re-download credentials from Google Cloud Console
-3. Check for missing commas, quotes, or brackets
-
-### "Invalid private key format"
-
-**Cause:** Private key doesn't start with `-----BEGIN PRIVATE KEY-----`
-
-**Solution:**
-1. Ensure you downloaded the JSON key (not P12)
-2. Check the `private_key` field contains the full key including headers
-3. In TOML format, use triple quotes for multiline strings:
-   ```toml
-   private_key = """-----BEGIN PRIVATE KEY-----
-   ...
-   -----END PRIVATE KEY-----
-   """
-   ```
-
-### "Missing required fields"
-
-**Cause:** Incomplete credentials dictionary
-
-**Solution:**
-1. Ensure all required fields are present:
-   - `type` (must be "service_account")
-   - `project_id`
-   - `private_key`
-   - `client_email`
-2. Re-download credentials from Google Cloud Console
-
-### "Authentication failed" (after credentials are loaded)
-
-**Cause:** Credentials are valid but authentication fails
-
-**Solution:**
-1. Verify domain-wide delegation is configured in Google Workspace Admin
-2. Check that the service account has the correct scopes
-3. Ensure `ADMIN_EMAIL` in Settings is a valid admin user
-4. Wait a few minutes for Google's systems to propagate changes
-
-### "TOML parser not available" (local development)
-
-**Cause:** Missing `tomli` package for Python < 3.11
-
-**Solution:**
-```bash
-pip install tomli
-```
-
-### Streamlit Cloud: Secrets not persisting
-
-**Cause:** Using JSON file instead of Streamlit Secrets
-
-**Solution:**
-1. Files uploaded via the UI don't persist on Streamlit Cloud
-2. Must use Streamlit Secrets (Settings → Secrets)
-3. See "For Streamlit Cloud" setup above
-
-### Local: Changes to secrets.toml not reflected
-
-**Cause:** App needs to be restarted to reload secrets
-
-**Solution:**
-1. In Streamlit, click "Rerun" or press `R`
-2. Or restart the app completely: `Ctrl+C` then `streamlit run streamlit_app.py`
-
-## Security Best Practices
-
-1. **Never commit credentials to Git:**
-   - `.streamlit/secrets.toml` is gitignored
-   - `service-account-credentials.json` is gitignored
-   - Only `.streamlit/secrets.toml.example` should be in version control
-
-2. **Use Streamlit Secrets for cloud deployment:**
-   - Encrypted at rest
-   - Only accessible to your app
-   - Not exposed in logs or error messages
-
-3. **Rotate credentials regularly:**
-   - Generate new service account keys periodically
-   - Delete old keys in Google Cloud Console
-   - Update secrets in all environments
-
-4. **Limit service account permissions:**
-   - Only grant necessary scopes
-   - Use principle of least privilege
-   - Monitor service account usage
-
-5. **For team sharing:**
-   - Share via secure channels (never email or Slack)
-   - Use organization's secret management system
-   - Document who has access
-
-## Additional Resources
-
-- [Streamlit Secrets Management](https://docs.streamlit.io/streamlit-community-cloud/deploy-your-app/secrets-management)
-- [Google Cloud Service Accounts](https://cloud.google.com/iam/docs/service-accounts)
-- [Google Workspace Admin SDK](https://developers.google.com/admin-sdk)
-
-## Need Help?
-
-- Check the Settings page in the app for credential status
-- Use "Test Connection" to verify authentication
-- Review app logs for detailed error messages
-- Consult your organization's internal documentation for Google Cloud access
+- Never commit real credentials to Git
+- Keep `service-account-credentials.json` local only
+- Prefer environment variables or your deployment platform's secret manager in production
+- Rotate service account keys regularly

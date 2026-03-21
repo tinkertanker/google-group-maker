@@ -1,495 +1,152 @@
 # Google Group Maker
 
-A tool for automating the creation and management of Google Groups. Available as CLI, Streamlit web interface, and a modern FastAPI web app with OAuth.
+Google Group Maker is a CLI and FastAPI web app for managing Google Groups with the Google Admin SDK.
 
-## Deployment Options
+## What it includes
 
-| Option | Best For | Auth | Setup |
-|--------|----------|------|-------|
-| **FastAPI Web App** | Self-hosted Docker | Google OAuth | [Docker Setup](#docker-deployment) |
-| **Streamlit Cloud** | Quick deployment | None (service account only) | [Streamlit Setup](#quick-start-streamlit-web-interface) |
-| **CLI** | Automation/scripting | Service account | [CLI Setup](#command-line-interface) |
-
----
-
-## Docker Deployment (Recommended)
-
-The FastAPI web app provides Google OAuth authentication and a modern interface.
-
-### Prerequisites
-- Docker and Docker Compose
-- Google Cloud project with OAuth credentials
-- Service account with domain-wide delegation
-
-### Quick Start
-
-1. **Clone and configure:**
-   ```bash
-   git clone <repository-url>
-   cd google-group-maker
-   cp .env.example .env
-   # Edit .env with your configuration
-   ```
-
-2. **Set up OAuth credentials** (see [OAuth Setup Guide](#oauth-setup))
-
-3. **Run with Docker Compose:**
-   ```bash
-   docker-compose up -d
-   ```
-
-4. **Access:** http://localhost:8000
-
-### OAuth Setup
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
-2. Create OAuth 2.0 Client ID (Web application)
-3. Add authorised redirect URI: `http://localhost:8000/auth/callback`
-4. Copy Client ID and Secret to `.env`:
-   ```
-   GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-   GOOGLE_CLIENT_SECRET=your-client-secret
-   ```
-
-5. Optionally restrict to your domain:
-   ```
-   ALLOWED_DOMAIN=yourdomain.com
-   ```
-
-### Environment Variables (Web App)
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `GOOGLE_CLIENT_ID` | Yes | OAuth client ID |
-| `GOOGLE_CLIENT_SECRET` | Yes | OAuth client secret |
-| `SESSION_SECRET` | Yes | Random string for session signing |
-| `DEFAULT_EMAIL` | Yes | Default admin email |
-| `ALLOWED_DOMAIN` | No | Restrict login to domain |
-| `GOOGLE_GROUP_DOMAIN` | No | Default domain for groups |
-| `GOOGLE_SERVICE_ACCOUNT_JSON` | No* | Service account JSON string |
-
-*Either `GOOGLE_SERVICE_ACCOUNT_JSON` or a mounted `service-account-credentials.json` file is required.
-
----
-
-## Quick Start (Streamlit Web Interface)
-
-### Prerequisites
-- Python 3.6+
-- Google Workspace Admin access
-- Service account credentials from Google Cloud Console
-
-### Setup
-
-1. **Clone and install**:
-   ```bash
-   git clone <repository-url>
-   cd google-group-maker
-   pip install -r requirements.txt
-   ```
-
-2. **Configure credentials and environment:**
-   ```bash
-   # Copy the example secrets file
-   cp .streamlit/secrets.toml.example .streamlit/secrets.toml
-   ```
-
-   Edit `.streamlit/secrets.toml` to include:
-   - **`[google_service_account]` section** - Your Google service account credentials
-   - **`[env]` section** - Required environment variables:
-     - `DEFAULT_EMAIL` - Your admin email address
-     - `GOOGLE_GROUP_DOMAIN` - Your organization's domain
-     - `ADMIN_EMAIL` - Optional (defaults to DEFAULT_EMAIL)
-
-   See [Credentials Setup Guide](docs/CREDENTIALS.md) for detailed instructions.
-
-   > **Note:** A `.env` file is optional and mainly used for CLI usage or local overrides. Streamlit secrets is the recommended approach for both local and cloud deployment.
-
-3. **Run the application:**
-   ```bash
-   streamlit run streamlit_app.py
-   ```
-
-4. **Access the interface**:
-   - Navigate to Settings page to verify configuration
-   - Test authentication
-   - Start creating groups!
-
-### Features
-- **Streamlit Secrets Support**: Credentials are automatically loaded from Streamlit secrets (cloud-ready!)
-- **Web Interface**: User-friendly Streamlit interface for all operations
-- **CLI Support**: Command-line tools available for automation and scripting
-
-### Command Line Interface
-
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Set up service account credentials
-cp service-account-credentials.example.json service-account-credentials.json
-# Edit service-account-credentials.json with your actual credentials
-
-# Make script executable
-chmod +x groupmaker.py
-
-# Create a new group with an external trainer
-./groupmaker.py create python-class-feb2023 external_trainer@example.com
-
-# Create a group in a specific domain (using --domain parameter)
-./groupmaker.py --domain example.org create python-class-feb2023 external_trainer@example.com
-
-# Create a group in a specific domain (specifying domain in group name)
-./groupmaker.py create python-class-feb2023@example.org external_trainer@example.com
-
-# List all groups
-./groupmaker.py list
-```
-
-## Overview
-
-This tool automates the process of:
-
-1. Creating new Google Groups in your organisation
-2. Adding members to groups
-3. Listing existing groups with filtering options
-4. Deleting groups with confirmation
-5. Renaming existing Google Groups
-
-Available as both a command-line tool and a web interface (Streamlit).
+- A CLI for scripted or ad-hoc group management
+- A FastAPI web app with Google OAuth authentication
+- Docker deployment for self-hosted use
 
 ## Requirements
 
--   Python 3.6+
--   Google Admin SDK API access
--   Service account with proper permissions
--   Required Python packages:
-    -   google-api-python-client
-    -   google-auth-httplib2
-    -   google-auth-oauthlib
+- Python 3.9+
+- Google Workspace admin access
+- A Google Cloud service account with domain-wide delegation
+- For the web app: an OAuth 2.0 Web Application client
 
-## Setup
+## Quick Start
 
-1. Install required packages:
-
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-2. **Service Account Credentials**
-
-   The recommended approach is to use **Streamlit Secrets** (see [Credentials Setup Guide](docs/CREDENTIALS.md)):
-
-   - Edit `.streamlit/secrets.toml` with your service account credentials (`[google_service_account]` section)
-   - Also configure environment variables in the `[env]` section (DEFAULT_EMAIL, GOOGLE_GROUP_DOMAIN, optional ADMIN_EMAIL)
-   - Both `.streamlit/secrets.toml` and service account JSON files are gitignored
-
-   **Alternative (CLI/local dev):** You can use `service-account-credentials.json` as a fallback, but this won't work on Streamlit Cloud.
-
-   For Streamlit Cloud deployment, configure secrets via the Cloud UI (see docs).
-
-   📚 **For detailed setup instructions, troubleshooting, and migration guide**, see [docs/CREDENTIALS.md](docs/CREDENTIALS.md)
-
-3. Make the script executable:
-    ```bash
-    chmod +x groupmaker.py
-    ```
-
-4. **Configuration Options:**
-
-    You can set default values using environment variables or a `.env` file:
-    ```
-    GOOGLE_GROUP_DOMAIN=yourdomain.com
-    DEFAULT_EMAIL=your-email@yourdomain.com
-    ADMIN_EMAIL=admin@yourdomain.com
-    ```
-    
-    **IMPORTANT:** The `DEFAULT_EMAIL` environment variable is required. This replaces the hardcoded default email.
-    Create a `.env` file in the same directory as the script to automatically load these settings.
-
-## Usage
-
-The script supports multiple commands with different functionality:
-
-### Creating a Group
+### CLI
 
 ```bash
-./groupmaker.py create GROUP_NAME TRAINER_EMAIL [options]
-```
-
-Example:
-
-```bash
-# Basic usage
-./groupmaker.py create python-class-feb2023 external_trainer@example.com
-
-# Specify the domain as part of the group name
-./groupmaker.py create python-class-feb2023@example.org external_trainer@example.com
-
-# Using the --domain parameter
-./groupmaker.py --domain example.org create python-class-feb2023 external_trainer@example.com
-```
-
-**Expected Output:**
-```
-Creating group: python-class-feb2023@tinkertanker.com
-Group created successfully
-Adding trainer external_trainer@example.com to group
-Adding admin yjsoon@tinkertanker.com to group
-All members added successfully
-```
-
-**Options:**
--   `--skip-self`: Optional flag to skip adding yourself to the group
--   `--self-email`: Your email address (defaults to the admin email in the script)
--   `--description`: Optional description for the group
-
-### Listing Groups
-
-```bash
-./groupmaker.py list [options]
-```
-
-This will display all Google Groups in your domain in a formatted table.
-
-**Expected Output:**
-```
-Found 23 groups:
-------------------------------------------------------------------------------------------------------------------------
-EMAIL ADDRESS                            NAME                          DESCRIPTION
-------------------------------------------------------------------------------------------------------------------------
-python-class-feb2023@tinkertanker.com    python-class-feb2023          Python class February 2023    
-java-workshop-apr2023@tinkertanker.com   java-workshop-apr2023         Java workshop April 2023      
-```
-
-**Options:**
--   `--query TEXT`: Filter groups containing this text in their email, name, or description
--   `--max-results NUMBER`: Maximum number of results to return per page (default: 100)
-
-Example:
-
-```bash
-# List all groups
-./groupmaker.py list
-
-# List groups with "class" in their name, email or description
-./groupmaker.py list --query class
-```
-
-### Listing Group Members
-
-```bash
-./groupmaker.py members GROUP_NAME [options]
-```
-
-This will display all members of a specific Google Group with detailed information.
-
-**Expected Output:**
-```
-Found 5 members in python-class-feb2023@tinkertanker.com:
---------------------------------------------------------------------------------------------------------------------------------------------
-EMAIL ADDRESS                                 NAME                      ROLE            TYPE       STATUS
---------------------------------------------------------------------------------------------------------------------------------------------
-yjsoon@tinkertanker.com                      Yjsoon                    👑 OWNER        USER       ACTIVE
-trainer@example.com                          Trainer                   ⭐ MANAGER      USER       ACTIVE
-alice.johnson@tinkertanker.com               Alice Johnson             MEMBER          USER       ACTIVE
-bob.smith@tinkertanker.com                   Bob Smith                 MEMBER          USER       ACTIVE
-charlie.chen@tinkertanker.com                Charlie Chen              MEMBER          USER       ACTIVE
---------------------------------------------------------------------------------------------------------------------------------------------
-Summary: 1 owners, 1 managers, 3 members
-```
-
-**Features:**
-- Members are sorted by role (owners first, then managers, then regular members)
-- Names are extracted and displayed for better identification
-- Visual markers (👑 for owners, ⭐ for managers) help identify roles at a glance
-- Summary shows total count by role
-
-**Options:**
--   `--include-derived`: Include members from nested groups
--   `--max-results NUMBER`: Maximum number of results to return per page (default: 100)
-
-Example:
-
-```bash
-# List members of a group (the command is 'members', not 'list_members')
-./groupmaker.py members python-class-feb2023
-
-# You can use partial group names - the script will add the domain
-./groupmaker.py members trainer.brandon
-
-# Include nested group members
-./groupmaker.py members python-class-feb2023 --include-derived
-
-# Specify full email if needed
-./groupmaker.py members trainer.brandon@tinkertanker.com
-```
-
-### Deleting a Group
-
-```bash
-./groupmaker.py delete GROUP_NAME
-```
-
-This will delete a Google Group after confirmation. For safety, you must type 'yes' to confirm deletion.
-
-**Expected Output:**
-```
-Are you sure you want to delete the group python-class-feb2023@tinkertanker.com? (yes/no): yes
-Group python-class-feb2023@tinkertanker.com deleted successfully.
-```
-
-Example:
-
-```bash
-# Basic usage
-./groupmaker.py delete python-class-feb2023
-
-# Specify the domain as part of the group name
-./groupmaker.py delete python-class-feb2023@example.org
-
-# Using the --domain parameter
-./groupmaker.py --domain example.org delete python-class-feb2023
-```
-
-### Renaming a Group
-
-```bash
-./groupmaker.py rename OLD_GROUP_NAME NEW_GROUP_NAME
-```
-
-This will rename an existing Google Group to a new name.
-
-**Expected Output:**
-```
-Successfully renamed group from old-name@tinkertanker.com to new-name@tinkertanker.com
-```
-
-Example:
-
-```bash
-# Basic usage
-./groupmaker.py rename python-class-feb2023 python-class-march2023
-
-# Specify the domain in group names
-./groupmaker.py rename python-class-feb2023@example.org python-class-march2023
-
-# Using the --domain parameter
-./groupmaker.py --domain example.org rename python-class-feb2023 python-class-march2023
-```
-
-### Getting Help
-
-```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+cp service-account-credentials.example.json service-account-credentials.json
+chmod +x groupmaker.py
 ./groupmaker.py --help
 ```
 
-To get help for specific commands:
+### Web app (local development)
 
 ```bash
-./groupmaker.py create --help
-./groupmaker.py list --help
-./groupmaker.py delete --help
-./groupmaker.py rename --help
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt -r requirements-web.txt
+cp .env.example .env
+uvicorn web.app:app --reload
+```
+
+Open `http://localhost:8000`.
+
+### Docker deployment
+
+```bash
+docker-compose up -d
 ```
 
 ## Configuration
 
-The script uses the following default values that can be configured:
+Copy `.env.example` to `.env` and set the values you need.
 
--   Domain: tinkertanker.com (can be set in multiple ways)
--   Default admin email: yjsoon@tinkertanker.com (can be set with `ADMIN_EMAIL` environment variable)
+### Required
 
-### Domain Configuration Priority
+| Variable | Description |
+| --- | --- |
+| `DEFAULT_EMAIL` | Default email used for API delegation |
 
-When determining which domain to use, the script uses the following priority order:
+### Optional for CLI and web
 
-1. Domain specified in the group name itself (e.g., `group@example.com`)
-2. Domain specified with the `--domain` command-line parameter 
-3. Domain specified with the `GOOGLE_GROUP_DOMAIN` environment variable
-4. Default domain (tinkertanker.com)
+| Variable | Description |
+| --- | --- |
+| `ADMIN_EMAIL` | Admin email used for delegation; defaults to `DEFAULT_EMAIL` |
+| `GOOGLE_GROUP_DOMAIN` | Default domain for groups |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | Service account credentials as a JSON string |
 
-### Example: Specifying Domain in Group Name
+### Web app only
 
-```bash
-# Specify domain directly in the group name - highest priority
-./groupmaker.py create new-group@example.org trainer@example.com
-./groupmaker.py delete group-name@example.org
-```
+| Variable | Description |
+| --- | --- |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
+| `SESSION_SECRET` | Session signing secret |
+| `ALLOWED_DOMAIN` | Optional login domain restriction |
 
-### Example: Using the Domain Parameter
+You can provide service account credentials in either of these ways:
 
-```bash
-# Set domain for a single command
-./groupmaker.py --domain example.org create new-group trainer@example.com
+1. `GOOGLE_SERVICE_ACCOUNT_JSON`
+2. `service-account-credentials.json` in the project root
 
-# Using the shorthand -d option
-./groupmaker.py -d example.org list
-```
+See [docs/CREDENTIALS.md](docs/CREDENTIALS.md) for the full setup.
 
-### Example: Using Environment Variables
+## OAuth Setup
 
-```bash
-# Set for a single command
-GOOGLE_GROUP_DOMAIN=example.com ADMIN_EMAIL=admin@example.com ./groupmaker.py list
+1. Open the [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+2. Create an OAuth 2.0 Client ID for a Web application
+3. Add an authorised redirect URI:
+   - Local development: `http://localhost:8000/auth/callback`
+   - Production: `https://your-domain.com/auth/callback`
+4. Copy the client ID and secret into `.env`
 
-# Or export for the current shell session
-export GOOGLE_GROUP_DOMAIN=example.com
-export ADMIN_EMAIL=admin@example.com
-./groupmaker.py create new-group trainer@example.com
-```
+## CLI Commands
 
-## Troubleshooting
+The CLI supports these commands:
 
-### Common Errors
+- `create`
+- `list`
+- `members`
+- `add`
+- `remove`
+- `delete`
+- `rename`
 
-1. **Authentication Failed**: 
-   - Check that your service-account-credentials.json file is correctly formatted and has the proper permissions
-   - Verify that the service account has been granted domain-wide delegation
-
-2. **Permission Denied**:
-   - Ensure the service account has been granted proper OAuth scopes in the Google Admin console
-   - Verify the admin email specified has Admin privileges in your GSuite/Workspace
-
-3. **Rate Limiting**:
-   - The script includes a delay between operations to avoid API rate limits
-   - If you encounter rate limiting errors, try increasing the delay value in the code
-
-### Debug Mode
-
-Run the script with the `--debug` flag to enable verbose logging:
+Examples:
 
 ```bash
-./groupmaker.py create python-class-feb2023 external_trainer@example.com --debug
+./groupmaker.py list
+./groupmaker.py create test-group trainer@example.com
+./groupmaker.py members test-group
+./groupmaker.py rename old-group new-group
 ```
 
-## Permissions
+## Web App
 
-The service account needs the following OAuth scopes:
+The FastAPI app supports:
 
--   https://www.googleapis.com/auth/admin.directory.group
--   https://www.googleapis.com/auth/admin.directory.group.member
+- Logging in with Google OAuth
+- Creating groups
+- Viewing groups and members
+- Editing group details inline
+- Adding, removing, and updating member roles
+- Deleting groups
 
-## Contributing
+For more detail, see [web/README.md](web/README.md).
 
-Contributions to Google Group Maker are welcome! Here's how you can contribute:
+## Project Structure
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/your-feature-name`
-3. Make your changes and commit them: `git commit -m 'Add some feature'`
-4. Push to the branch: `git push origin feature/your-feature-name`
-5. Open a pull request
+```text
+groupmaker.py         CLI entry point
+groupmaker_core.py    Shared Google Groups business logic
+web/                  FastAPI web app
+requirements.txt      CLI/core dependencies
+requirements-web.txt  Web app dependencies
+```
 
-Please follow these best practices:
-- Include clear commit messages
-- Add or update documentation as needed
-- Add appropriate error handling
-- Test your changes thoroughly
-
-## Development
-
-If you're developing new features, create a feature branch:
+## Health Check
 
 ```bash
-git checkout -b feature/group-management
+curl http://localhost:8000/health
 ```
+
+Expected response:
+
+```json
+{"status":"ok"}
+```
+
+## Development Notes
+
+- `groupmaker_core.py` is the shared logic layer used by both interfaces
+- The web app uses OAuth for user login and a service account for Admin SDK calls
+- Always test changes against non-production groups first

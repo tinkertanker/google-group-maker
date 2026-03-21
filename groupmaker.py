@@ -395,7 +395,7 @@ def main():
         else:
             print("ERROR: No service account credentials found!")
             print("Please provide credentials via:")
-            print("  1. GOOGLE_SERVICE_ACCOUNT_JSON environment variable (for Streamlit Cloud)")
+            print("  1. GOOGLE_SERVICE_ACCOUNT_JSON environment variable")
             print("  2. service-account-credentials.json file (for local development)")
             print("Check the company Notion documentation for instructions on obtaining credentials.")
         sys.exit(1)

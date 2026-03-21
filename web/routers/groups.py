@@ -132,6 +132,7 @@ async def create_group(
 async def group_members(
     request: Request,
     group_email: str,
+    rename: bool = False,
     user: dict = Depends(require_auth),
 ):
     """Show group members."""
@@ -155,34 +156,20 @@ async def group_members(
             "members": members_result.data.get("members", []) if members_result.success else [],
             "summary": members_result.data.get("summary", {}) if members_result.success else {},
             "error": members_result.error if not members_result.success else None,
+            "rename_mode": rename,
             "flash_messages": get_flash_messages(request),
         },
     )
 
 
-@router.get("/{group_email}/edit", response_class=HTMLResponse)
+@router.get("/{group_email}/edit")
 async def edit_group_form(
     request: Request,
     group_email: str,
     user: dict = Depends(require_auth),
 ):
-    """Show edit/rename group form."""
-    service = get_google_service(request)
-
-    group_result = core.get_group(service, group_email)
-    if not group_result.success:
-        flash(request, f"Group not found: {group_result.error}", "error")
-        return RedirectResponse(url="/groups", status_code=303)
-
-    return templates.TemplateResponse(
-        "groups/edit.html",
-        {
-            "request": request,
-            "user": user,
-            "group": group_result.data,
-            "flash_messages": get_flash_messages(request),
-        },
-    )
+    """Redirect legacy edit page to the inline rename view."""
+    return RedirectResponse(url=f"/groups/{group_email}/members?rename=1", status_code=303)
 
 
 @router.post("/{group_email}/rename")
@@ -193,10 +180,16 @@ async def rename_group(
     user: dict = Depends(require_auth),
 ):
     """Rename a group."""
+    new_name = new_name.strip()
+
+    if "@" in new_name:
+        flash(request, "Please enter only the group name before @, not the full email address.", "error")
+        return RedirectResponse(url=f"/groups/{group_email}/members?rename=1", status_code=303)
+
     validation = core.validate_group_name(new_name)
     if not validation.valid:
         flash(request, validation.error, "error")
-        return RedirectResponse(url=f"/groups/{group_email}/edit", status_code=303)
+        return RedirectResponse(url=f"/groups/{group_email}/members?rename=1", status_code=303)
 
     service = get_google_service(request)
 
@@ -212,7 +205,7 @@ async def rename_group(
         return RedirectResponse(url=f"/groups/{new_email}/members", status_code=303)
     else:
         flash(request, f"Failed to rename: {result.error}", "error")
-        return RedirectResponse(url=f"/groups/{group_email}/edit", status_code=303)
+        return RedirectResponse(url=f"/groups/{group_email}/members?rename=1", status_code=303)
 
 
 @router.delete("/{group_email}")

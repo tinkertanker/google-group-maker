@@ -3,18 +3,66 @@
 {% block title %}{{ group.email }} - Members{% endblock %}
 
 {% block content %}
+{% set group_name = group.email.split('@')[0] %}
+{% set group_domain = group.email.split('@')[1] %}
 <div class="space-y-6">
-    <div class="flex items-center justify-between">
-        <div>
+    <div class="flex items-start justify-between gap-4">
+        <div class="min-w-0 flex-1">
             <a href="/groups" class="text-sm text-gray-500 hover:text-gray-700">&larr; Back to groups</a>
-            <h1 class="text-2xl font-semibold text-gray-900 mt-1">{{ group.email }}</h1>
+            <div id="group-title-display" class="mt-1 {% if rename_mode %}hidden{% endif %}">
+                <h1 class="text-2xl font-semibold text-gray-900 break-all">{{ group.email }}</h1>
+            </div>
+            <form
+                id="rename-form"
+                method="post"
+                action="/groups/{{ group.email }}/rename"
+                class="mt-1 {% if not rename_mode %}hidden{% endif %}"
+            >
+                <label for="new_name" class="sr-only">New Group Name</label>
+                <div class="flex items-baseline gap-1 flex-wrap">
+                    <input
+                        type="text"
+                        name="new_name"
+                        id="new_name"
+                        required
+                        pattern="[A-Za-z0-9._-]+"
+                        title="Use only letters, numbers, periods, hyphens, and underscores"
+                        value="{{ group_name }}"
+                        class="min-w-[220px] max-w-full px-0 py-0 text-2xl font-semibold text-gray-900 bg-transparent border-0 border-b border-gray-300 rounded-none focus:border-gray-500 focus:ring-0"
+                    >
+                    <span class="text-2xl font-semibold text-gray-500">@{{ group_domain }}</span>
+                </div>
+                <p class="mt-2 text-xs text-gray-500">
+                    Enter the part before @ to change the group's email address to
+                    <span id="rename-preview">{{ group_name }}</span>@{{ group_domain }}
+                </p>
+            </form>
             {% if group.description %}
-            <p class="text-sm text-gray-600">{{ group.description }}</p>
+            <p class="text-sm text-gray-600 mt-2">{{ group.description }}</p>
             {% endif %}
         </div>
-        <div class="flex gap-2">
-            <a href="/groups/{{ group.email }}/edit" class="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+        <div class="flex shrink-0 items-center gap-2">
+            <a
+                href="/groups/{{ group.email }}/members?rename=1"
+                id="rename-toggle"
+                class="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 {% if rename_mode %}hidden{% endif %}"
+            >
                 Rename
+            </a>
+            <button
+                type="submit"
+                form="rename-form"
+                id="rename-save"
+                class="px-3 py-2 text-sm font-medium text-white bg-gray-900 rounded-md hover:bg-gray-800 {% if not rename_mode %}hidden{% endif %}"
+            >
+                Save
+            </button>
+            <a
+                href="/groups/{{ group.email }}/members"
+                id="rename-cancel"
+                class="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 {% if not rename_mode %}hidden{% endif %}"
+            >
+                Cancel
             </a>
         </div>
     </div>
@@ -125,4 +173,78 @@
         </form>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(() => {
+    const display = document.getElementById("group-title-display");
+    const form = document.getElementById("rename-form");
+    const toggle = document.getElementById("rename-toggle");
+    const save = document.getElementById("rename-save");
+    const cancel = document.getElementById("rename-cancel");
+    const input = document.getElementById("new_name");
+    const preview = document.getElementById("rename-preview");
+
+    if (!display || !form || !toggle || !save || !cancel || !input || !preview) {
+        return;
+    }
+
+    const initialValue = input.value;
+
+    function updatePreview() {
+        preview.textContent = input.value.trim() || initialValue;
+    }
+
+    function setRenameMode(isRenaming) {
+        display.classList.toggle("hidden", isRenaming);
+        form.classList.toggle("hidden", !isRenaming);
+        toggle.classList.toggle("hidden", isRenaming);
+        save.classList.toggle("hidden", !isRenaming);
+        cancel.classList.toggle("hidden", !isRenaming);
+
+        const url = new URL(window.location.href);
+        if (isRenaming) {
+            url.searchParams.set("rename", "1");
+            window.requestAnimationFrame(() => {
+                input.focus();
+                input.select();
+            });
+        } else {
+            url.searchParams.delete("rename");
+            input.value = initialValue;
+            updatePreview();
+        }
+
+        window.history.replaceState({}, "", url);
+    }
+
+    toggle.addEventListener("click", (event) => {
+        event.preventDefault();
+        setRenameMode(true);
+    });
+
+    cancel.addEventListener("click", (event) => {
+        event.preventDefault();
+        setRenameMode(false);
+    });
+
+    input.addEventListener("input", updatePreview);
+    input.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+            event.preventDefault();
+            setRenameMode(false);
+        }
+    });
+
+    updatePreview();
+
+    if (!form.classList.contains("hidden")) {
+        window.requestAnimationFrame(() => {
+            input.focus();
+            input.select();
+        });
+    }
+})();
+</script>
 {% endblock %}

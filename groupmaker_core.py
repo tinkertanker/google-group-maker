@@ -315,6 +315,66 @@ def delete_group(service: Resource, group_email: str) -> OperationResult:
         )
 
 
+def update_group(
+    service: Resource,
+    group_email: str,
+    new_name: Optional[str] = None,
+    description: Optional[str] = None,
+    new_domain: Optional[str] = None
+) -> OperationResult:
+    """
+    Update a Google Group's name/email and/or description.
+
+    Args:
+        service: Google Directory API service
+        group_email: Current full email address
+        new_name: New name for the group (without domain)
+        description: New description, or None to keep the current one
+        new_domain: New domain (defaults to same as current)
+
+    Returns:
+        OperationResult with updated group data
+    """
+    check = get_group(service, group_email)
+    if not check.success:
+        return check
+
+    group = check.data
+    current_email = group.get('email', group_email)
+    current_name, current_domain = current_email.split('@')
+    target_name = new_name or current_name
+    target_domain = new_domain or current_domain
+    target_email = f"{target_name}@{target_domain}"
+
+    if target_email != current_email:
+        new_check = get_group(service, target_email)
+        if new_check.success:
+            return OperationResult(
+                success=False,
+                message=f"Cannot update: group '{target_email}' already exists",
+                error="Target group already exists"
+            )
+
+    try:
+        group['email'] = target_email
+        group['name'] = target_name
+        if description is not None:
+            group['description'] = description
+
+        result = service.groups().update(groupKey=current_email, body=group).execute()
+        return OperationResult(
+            success=True,
+            message=f"Group '{current_email}' updated successfully",
+            data=result
+        )
+    except Exception as e:
+        return OperationResult(
+            success=False,
+            message="Failed to update group",
+            error=str(e)
+        )
+
+
 def rename_group(
     service: Resource,
     old_email: str,

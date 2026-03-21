@@ -9,16 +9,19 @@
     <div class="flex items-start justify-between gap-4">
         <div class="min-w-0 flex-1">
             <a href="/groups" class="text-sm text-gray-500 hover:text-gray-700">&larr; Back to groups</a>
-            <div id="group-title-display" class="mt-1 {% if rename_mode %}hidden{% endif %}">
+            <div id="group-display" class="mt-1 {% if edit_mode %}hidden{% endif %}">
                 <h1 class="text-2xl font-semibold text-gray-900 break-all">{{ group.email }}</h1>
+                {% if group.description %}
+                <p class="mt-2 text-sm text-gray-600 whitespace-pre-line">{{ group.description }}</p>
+                {% endif %}
             </div>
             <form
-                id="rename-form"
+                id="edit-form"
                 method="post"
-                action="/groups/{{ group.email }}/rename"
-                class="mt-1 {% if not rename_mode %}hidden{% endif %}"
+                action="/groups/{{ group.email }}/edit"
+                class="mt-1 space-y-3 {% if not edit_mode %}hidden{% endif %}"
             >
-                <label for="new_name" class="sr-only">New Group Name</label>
+                <label for="new_name" class="sr-only">Group Name</label>
                 <div class="flex items-baseline gap-1 flex-wrap">
                     <input
                         type="text"
@@ -32,35 +35,42 @@
                     >
                     <span class="text-2xl font-semibold text-gray-500">@{{ group_domain }}</span>
                 </div>
+                <div class="max-w-2xl">
+                    <label for="description" class="block text-xs font-medium text-gray-500 uppercase tracking-wide">Description</label>
+                    <textarea
+                        name="description"
+                        id="description"
+                        rows="3"
+                        placeholder="Add a description"
+                        class="mt-1 block w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-400"
+                    >{{- group.description or '' -}}</textarea>
+                </div>
                 <p class="mt-2 text-xs text-gray-500">
                     Enter the part before @ to change the group's email address to
-                    <span id="rename-preview">{{ group_name }}</span>@{{ group_domain }}
+                    <span id="group-email-preview">{{ group_name }}</span>@{{ group_domain }}
                 </p>
             </form>
-            {% if group.description %}
-            <p class="text-sm text-gray-600 mt-2">{{ group.description }}</p>
-            {% endif %}
         </div>
         <div class="flex shrink-0 items-center gap-2">
             <a
-                href="/groups/{{ group.email }}/members?rename=1"
-                id="rename-toggle"
-                class="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 {% if rename_mode %}hidden{% endif %}"
+                href="/groups/{{ group.email }}/edit"
+                id="edit-toggle"
+                class="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 {% if edit_mode %}hidden{% endif %}"
             >
-                Rename
+                Edit
             </a>
             <button
                 type="submit"
-                form="rename-form"
-                id="rename-save"
-                class="px-3 py-2 text-sm font-medium text-white bg-gray-900 rounded-md hover:bg-gray-800 {% if not rename_mode %}hidden{% endif %}"
+                form="edit-form"
+                id="edit-save"
+                class="px-3 py-2 text-sm font-medium text-white bg-gray-900 rounded-md hover:bg-gray-800 {% if not edit_mode %}hidden{% endif %}"
             >
                 Save
             </button>
             <a
                 href="/groups/{{ group.email }}/members"
-                id="rename-cancel"
-                class="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 {% if not rename_mode %}hidden{% endif %}"
+                id="edit-cancel"
+                class="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 {% if not edit_mode %}hidden{% endif %}"
             >
                 Cancel
             </a>
@@ -178,41 +188,45 @@
 {% block scripts %}
 <script>
 (() => {
-    const display = document.getElementById("group-title-display");
-    const form = document.getElementById("rename-form");
-    const toggle = document.getElementById("rename-toggle");
-    const save = document.getElementById("rename-save");
-    const cancel = document.getElementById("rename-cancel");
+    const display = document.getElementById("group-display");
+    const form = document.getElementById("edit-form");
+    const toggle = document.getElementById("edit-toggle");
+    const save = document.getElementById("edit-save");
+    const cancel = document.getElementById("edit-cancel");
     const input = document.getElementById("new_name");
-    const preview = document.getElementById("rename-preview");
+    const descriptionInput = document.getElementById("description");
+    const preview = document.getElementById("group-email-preview");
 
-    if (!display || !form || !toggle || !save || !cancel || !input || !preview) {
+    if (!display || !form || !toggle || !save || !cancel || !input || !descriptionInput || !preview) {
         return;
     }
 
     const initialValue = input.value;
+    const initialDescription = descriptionInput.value;
 
     function updatePreview() {
         preview.textContent = input.value.trim() || initialValue;
     }
 
-    function setRenameMode(isRenaming) {
-        display.classList.toggle("hidden", isRenaming);
-        form.classList.toggle("hidden", !isRenaming);
-        toggle.classList.toggle("hidden", isRenaming);
-        save.classList.toggle("hidden", !isRenaming);
-        cancel.classList.toggle("hidden", !isRenaming);
+    function setEditMode(isEditing) {
+        display.classList.toggle("hidden", isEditing);
+        form.classList.toggle("hidden", !isEditing);
+        toggle.classList.toggle("hidden", isEditing);
+        save.classList.toggle("hidden", !isEditing);
+        cancel.classList.toggle("hidden", !isEditing);
 
         const url = new URL(window.location.href);
-        if (isRenaming) {
-            url.searchParams.set("rename", "1");
+        if (isEditing) {
+            url.searchParams.set("edit", "1");
             window.requestAnimationFrame(() => {
                 input.focus();
                 input.select();
             });
         } else {
+            url.searchParams.delete("edit");
             url.searchParams.delete("rename");
             input.value = initialValue;
+            descriptionInput.value = initialDescription;
             updatePreview();
         }
 
@@ -221,19 +235,19 @@
 
     toggle.addEventListener("click", (event) => {
         event.preventDefault();
-        setRenameMode(true);
+        setEditMode(true);
     });
 
     cancel.addEventListener("click", (event) => {
         event.preventDefault();
-        setRenameMode(false);
+        setEditMode(false);
     });
 
     input.addEventListener("input", updatePreview);
     input.addEventListener("keydown", (event) => {
         if (event.key === "Escape") {
             event.preventDefault();
-            setRenameMode(false);
+            setEditMode(false);
         }
     });
 

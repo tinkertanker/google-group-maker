@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Request, Depends, Form, HTTPException
+from fastapi import APIRouter, Request, Depends, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -18,7 +18,6 @@ from web.dependencies import (
     get_google_service,
     flash,
     get_flash_messages,
-    build_group_email,
     DEFAULT_DOMAIN,
 )
 
@@ -132,6 +131,7 @@ async def create_group(
 async def group_members(
     request: Request,
     group_email: str,
+    edit: bool = False,
     rename: bool = False,
     user: dict = Depends(require_auth),
 ):
@@ -156,7 +156,7 @@ async def group_members(
             "members": members_result.data.get("members", []) if members_result.success else [],
             "summary": members_result.data.get("summary", {}) if members_result.success else {},
             "error": members_result.error if not members_result.success else None,
-            "rename_mode": rename,
+            "edit_mode": edit or rename,
             "flash_messages": get_flash_messages(request),
         },
     )
@@ -168,44 +168,55 @@ async def edit_group_form(
     group_email: str,
     user: dict = Depends(require_auth),
 ):
-    """Redirect legacy edit page to the inline rename view."""
-    return RedirectResponse(url=f"/groups/{group_email}/members?rename=1", status_code=303)
+    """Redirect to the inline edit view."""
+    return RedirectResponse(url=f"/groups/{group_email}/members?edit=1", status_code=303)
 
 
+@router.post("/{group_email}/edit")
 @router.post("/{group_email}/rename")
-async def rename_group(
+async def edit_group(
     request: Request,
     group_email: str,
     new_name: str = Form(...),
+    description: Optional[str] = Form(None),
     user: dict = Depends(require_auth),
 ):
-    """Rename a group."""
+    """Update a group's name and description."""
     new_name = new_name.strip()
+    if description is not None:
+        description = description.strip()
 
     if "@" in new_name:
         flash(request, "Please enter only the group name before @, not the full email address.", "error")
-        return RedirectResponse(url=f"/groups/{group_email}/members?rename=1", status_code=303)
+        return RedirectResponse(url=f"/groups/{group_email}/members?edit=1", status_code=303)
 
     validation = core.validate_group_name(new_name)
     if not validation.valid:
         flash(request, validation.error, "error")
-        return RedirectResponse(url=f"/groups/{group_email}/members?rename=1", status_code=303)
+        return RedirectResponse(url=f"/groups/{group_email}/members?edit=1", status_code=303)
 
     service = get_google_service(request)
 
-    # Extract domain from old email
     _, old_domain = group_email.split("@")
-    new_domain = validation.domain or old_domain
+    new_email = f"{validation.group_name}@{old_domain}"
 
-    result = core.rename_group(service, group_email, validation.group_name, new_domain=new_domain)
+    result = core.update_group(
+        service,
+        group_email,
+        new_name=validation.group_name,
+        description=description,
+        new_domain=old_domain,
+    )
 
     if result.success:
-        new_email = f"{validation.group_name}@{new_domain}"
-        flash(request, f"Group renamed to {new_email}", "success")
+        if new_email != group_email:
+            flash(request, f"Group updated to {new_email}", "success")
+        else:
+            flash(request, f"Group {group_email} updated", "success")
         return RedirectResponse(url=f"/groups/{new_email}/members", status_code=303)
     else:
-        flash(request, f"Failed to rename: {result.error}", "error")
-        return RedirectResponse(url=f"/groups/{group_email}/members?rename=1", status_code=303)
+        flash(request, f"Failed to update group: {result.error}", "error")
+        return RedirectResponse(url=f"/groups/{group_email}/members?edit=1", status_code=303)
 
 
 @router.delete("/{group_email}")

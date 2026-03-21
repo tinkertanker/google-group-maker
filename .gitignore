@@ -50,3 +50,4 @@ ENV/
 ehthumbs.db
 Thumbs.db 
 **/.claude/settings.local.json
+deploy.sh

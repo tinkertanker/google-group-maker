@@ -31,18 +31,31 @@ async def list_groups(
     query: Optional[str] = None,
     user: dict = Depends(require_auth),
 ):
-    """List all groups with optional search filter."""
+    """List all groups from all domains with optional search filter."""
     service = get_google_service(request)
-    result = core.list_groups(service, domain=DEFAULT_DOMAIN, query=query)
+
+    # Fetch groups from all domains
+    all_groups = []
+    errors = []
+
+    for domain in AVAILABLE_DOMAINS:
+        result = core.list_groups(service, domain=domain, query=query)
+        if result.success:
+            all_groups.extend(result.data.get("groups", []))
+        else:
+            errors.append(f"{domain}: {result.error}")
+
+    # Sort by email address alphabetically
+    all_groups.sort(key=lambda g: g.get("email", "").lower())
 
     return templates.TemplateResponse(
         "groups/list.html",
         {
             "request": request,
             "user": user,
-            "groups": result.data.get("groups", []) if result.success else [],
+            "groups": all_groups,
             "query": query,
-            "error": result.error if not result.success else None,
+            "error": "; ".join(errors) if errors else None,
             "flash_messages": get_flash_messages(request),
         },
     )

@@ -21,6 +21,7 @@ templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 # Configuration
 ALLOWED_DOMAIN = os.environ.get("ALLOWED_DOMAIN", "")
 DEFAULT_DOMAIN = os.environ.get("GOOGLE_GROUP_DOMAIN", "tinkertanker.com")
+AVAILABLE_DOMAINS = ["tinkertanker.com", "swiftinsg.org"]
 
 
 def get_current_user(request: Request) -> Optional[dict]:
@@ -54,15 +55,14 @@ def get_google_service(request: Request):
     if creds_result.credentials is None:
         raise HTTPException(
             status_code=500,
-            detail=f"Service account credentials not configured: {creds_result.error}"
+            detail=f"Service account credentials not configured: {creds_result.error}",
         )
 
     # Use configured admin email for delegation (not logged-in user)
     service = core.create_service(creds_result.credentials)
     if not service:
         raise HTTPException(
-            status_code=500,
-            detail="Failed to create Google Directory API service"
+            status_code=500, detail="Failed to create Google Directory API service"
         )
 
     return service
@@ -75,10 +75,7 @@ def flash(request: Request, message: str, category: str = "info"):
     """
     if "flash_messages" not in request.session:
         request.session["flash_messages"] = []
-    request.session["flash_messages"].append({
-        "message": message,
-        "category": category
-    })
+    request.session["flash_messages"].append({"message": message, "category": category})
 
 
 def get_flash_messages(request: Request) -> list:

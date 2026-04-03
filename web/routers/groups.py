@@ -19,6 +19,7 @@ from web.dependencies import (
     flash,
     get_flash_messages,
     DEFAULT_DOMAIN,
+    AVAILABLE_DOMAINS,
 )
 
 router = APIRouter()
@@ -59,6 +60,7 @@ async def new_group_form(
             "request": request,
             "user": user,
             "default_domain": DEFAULT_DOMAIN,
+            "available_domains": AVAILABLE_DOMAINS,
             "flash_messages": get_flash_messages(request),
         },
     )
@@ -68,6 +70,7 @@ async def new_group_form(
 async def create_group(
     request: Request,
     group_name: str = Form(...),
+    domain: str = Form(...),
     description: str = Form(""),
     trainer_emails: str = Form(""),
     add_self: bool = Form(False),
@@ -80,8 +83,12 @@ async def create_group(
         flash(request, validation.error, "error")
         return RedirectResponse(url="/groups/new", status_code=303)
 
+    # Validate domain is in the allowed list
+    if domain not in AVAILABLE_DOMAINS:
+        flash(request, f"Invalid domain: {domain}", "error")
+        return RedirectResponse(url="/groups/new", status_code=303)
+
     service = get_google_service(request)
-    domain = validation.domain or DEFAULT_DOMAIN
 
     # Create the group
     result = core.create_group(
@@ -100,12 +107,17 @@ async def create_group(
 
     # Wait for group to propagate
     import time
+
     time.sleep(2)
 
     # Add trainer emails if provided
     errors = []
     if trainer_emails.strip():
-        emails = [e.strip() for e in trainer_emails.replace(",", "\n").split("\n") if e.strip()]
+        emails = [
+            e.strip()
+            for e in trainer_emails.replace(",", "\n").split("\n")
+            if e.strip()
+        ]
         for email in emails:
             if core.validate_email(email):
                 add_result = core.add_member(service, group_email, email)
@@ -153,8 +165,12 @@ async def group_members(
             "request": request,
             "user": user,
             "group": group_result.data,
-            "members": members_result.data.get("members", []) if members_result.success else [],
-            "summary": members_result.data.get("summary", {}) if members_result.success else {},
+            "members": members_result.data.get("members", [])
+            if members_result.success
+            else [],
+            "summary": members_result.data.get("summary", {})
+            if members_result.success
+            else {},
             "error": members_result.error if not members_result.success else None,
             "edit_mode": edit or rename,
             "flash_messages": get_flash_messages(request),
@@ -169,7 +185,9 @@ async def edit_group_form(
     user: dict = Depends(require_auth),
 ):
     """Redirect to the inline edit view."""
-    return RedirectResponse(url=f"/groups/{group_email}/members?edit=1", status_code=303)
+    return RedirectResponse(
+        url=f"/groups/{group_email}/members?edit=1", status_code=303
+    )
 
 
 @router.post("/{group_email}/edit")
@@ -187,13 +205,21 @@ async def edit_group(
         description = description.strip()
 
     if "@" in new_name:
-        flash(request, "Please enter only the group name before @, not the full email address.", "error")
-        return RedirectResponse(url=f"/groups/{group_email}/members?edit=1", status_code=303)
+        flash(
+            request,
+            "Please enter only the group name before @, not the full email address.",
+            "error",
+        )
+        return RedirectResponse(
+            url=f"/groups/{group_email}/members?edit=1", status_code=303
+        )
 
     validation = core.validate_group_name(new_name)
     if not validation.valid:
         flash(request, validation.error, "error")
-        return RedirectResponse(url=f"/groups/{group_email}/members?edit=1", status_code=303)
+        return RedirectResponse(
+            url=f"/groups/{group_email}/members?edit=1", status_code=303
+        )
 
     service = get_google_service(request)
 
@@ -216,7 +242,9 @@ async def edit_group(
         return RedirectResponse(url=f"/groups/{new_email}/members", status_code=303)
     else:
         flash(request, f"Failed to update group: {result.error}", "error")
-        return RedirectResponse(url=f"/groups/{group_email}/members?edit=1", status_code=303)
+        return RedirectResponse(
+            url=f"/groups/{group_email}/members?edit=1", status_code=303
+        )
 
 
 @router.delete("/{group_email}")

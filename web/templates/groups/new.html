@@ -21,9 +21,15 @@
                     placeholder="my-group"
                     class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-l-md focus:outline-none focus:ring-1 focus:ring-gray-400"
                 >
-                <span class="inline-flex items-center px-3 text-sm text-gray-500 bg-gray-50 border border-l-0 border-gray-300 rounded-r-md">
-                    @{{ default_domain }}
-                </span>
+                <select
+                    name="domain"
+                    id="domain"
+                    class="px-3 py-2 text-sm text-gray-700 bg-gray-50 border border-l-0 border-gray-300 rounded-r-md focus:outline-none focus:ring-1 focus:ring-gray-400"
+                >
+                    {% for d in available_domains %}
+                    <option value="{{ d }}" {% if d == default_domain %}selected{% endif %}>@{{ d }}</option>
+                    {% endfor %}
+                </select>
             </div>
             <p class="mt-1 text-xs text-gray-500">Letters, numbers, hyphens, and underscores only</p>
         </div>

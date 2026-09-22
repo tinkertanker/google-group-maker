@@ -65,6 +65,27 @@ Gotchas:
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | web | OAuth credentials |
 | `ALLOWED_DOMAIN` | web | Comma-separated list of allowed login domains |
 | `SESSION_SECRET` | web | Session signing key |
+| `API_KEY` | web | Token for `/api/*` endpoints; API disabled if unset |
+
+## HTTP API
+
+Token-authenticated JSON API for automation (Slack workflows, scripts). Safe actions only — delete, rename, remove member and role changes stay in the web UI. Auth: `X-API-Key` header. Implemented in `web/routers/api.py`.
+
+```bash
+# List groups / members
+curl -H "X-API-Key: $API_KEY" "https://groups.tk.sg/api/groups?domain=tinkercademy.com"
+curl -H "X-API-Key: $API_KEY" "https://groups.tk.sg/api/groups/name@domain.com/members"
+
+# Create a group (members added as MEMBER)
+curl -X POST -H "X-API-Key: $API_KEY" -H "Content-Type: application/json" \
+  -d '{"name":"new-group","domain":"tinkertanker.com","members":["a@b.com"]}' \
+  https://groups.tk.sg/api/groups
+
+# Add a member (MEMBER role only)
+curl -X POST -H "X-API-Key: $API_KEY" -H "Content-Type: application/json" \
+  -d '{"email":"a@b.com"}' \
+  https://groups.tk.sg/api/groups/name@domain.com/members
+```
 
 ## Deployment
 

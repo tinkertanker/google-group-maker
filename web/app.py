@@ -25,7 +25,7 @@ from starlette.middleware.sessions import SessionMiddleware
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from web.routers import auth, groups, members
+from web.routers import api, auth, groups, members
 from web.dependencies import get_current_user, templates
 
 
@@ -58,6 +58,7 @@ app.mount("/static", StaticFiles(directory=static_path), name="static")
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(groups.router, prefix="/groups", tags=["groups"])
 app.include_router(members.router, tags=["members"])
+app.include_router(api.router, prefix="/api", tags=["api"])
 
 
 @app.get("/")

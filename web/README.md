@@ -48,7 +48,8 @@ docker-compose up -d
 | `ADMIN_EMAIL` | Explicit admin email for delegation |
 | `GOOGLE_GROUP_DOMAIN` | Default domain for groups |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | Service account credentials as JSON |
-| `ALLOWED_DOMAIN` | Restrict sign-in to a Google Workspace domain |
+| `ALLOWED_DOMAIN` | Restrict sign-in to Google Workspace domains (comma-separated) |
+| `API_KEY` | Token for the `/api/*` automation endpoints (disabled if unset) |
 
 You can also provide service account credentials via `service-account-credentials.json` in the project root.
 
@@ -90,6 +91,13 @@ Create a Google OAuth Web Application client and add these redirect URIs:
 - `POST /groups/{email}/members/{member}/remove`
 - `POST /groups/{email}/members/{member}/role`
 - `PATCH /groups/{email}/members/{member}`
+
+### API (token auth via `X-API-Key` header; safe actions only)
+
+- `GET /api/groups?domain=&query=`
+- `GET /api/groups/{email}/members`
+- `POST /api/groups` — `{name, domain?, description?, members?}` (members added as MEMBER)
+- `POST /api/groups/{email}/members` — `{email}` (MEMBER role only)
 
 ## Health Check
 

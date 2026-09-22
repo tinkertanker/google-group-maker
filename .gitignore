@@ -51,3 +51,6 @@ ehthumbs.db
 Thumbs.db 
 **/.claude/settings.local.json
 deploy.sh
+
+# Local SQLite data (minted API keys + audit log)
+data/

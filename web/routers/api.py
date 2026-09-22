@@ -12,7 +12,10 @@ use the browser OAuth flow. Deliberately limited surface:
 Destructive or disruptive actions (delete, rename, remove member, role
 changes) are not available here — use the web UI.
 
-Auth: X-API-Key header checked against the API_KEY env var.
+Auth: X-API-Key header — accepts minted keys (stored hashed in SQLite,
+managed at /keys) or the API_KEY env var as a master/bootstrap key.
+Every call is recorded in the api_audit table.
+
 Endpoints are plain `def` so blocking Google calls run in the threadpool.
 """
 
@@ -28,6 +31,7 @@ from pydantic import BaseModel, Field
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import groupmaker_core as core
+from web import apikeys
 from web.dependencies import AVAILABLE_DOMAINS, DEFAULT_DOMAIN, get_google_service
 
 router = APIRouter()
@@ -35,17 +39,18 @@ router = APIRouter()
 API_KEY = os.environ.get("API_KEY", "")
 
 
-def require_api_key(request: Request) -> None:
-    """Require a valid X-API-Key header."""
-    if not API_KEY:
-        raise HTTPException(
-            status_code=503, detail="API is disabled (API_KEY not set)"
-        )
+def require_api_key(request: Request) -> dict:
+    """Require a valid X-API-Key header. Returns the matched key's info."""
     provided = request.headers.get("x-api-key", "")
-    if not provided or not hmac.compare_digest(
-        provided.encode(), API_KEY.encode()
-    ):
+    if not provided:
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
+    # Master key from env (bootstrap / recovery if the key DB is lost)
+    if API_KEY and hmac.compare_digest(provided.encode(), API_KEY.encode()):
+        return {"id": None, "name": "env API_KEY", "prefix": "env"}
+    key = apikeys.lookup_key(provided)
+    if not key:
+        raise HTTPException(status_code=401, detail="Invalid or revoked API key")
+    return key
 
 
 def check_group_email(group_email: str) -> None:
@@ -91,10 +96,13 @@ class AddMemberRequest(BaseModel):
 def list_groups(
     domain: Optional[str] = None,
     query: Optional[str] = None,
-    _: None = Depends(require_api_key),
+    key: dict = Depends(require_api_key),
     service=Depends(get_google_service),
 ):
     """List groups across allowed domains, optionally filtered."""
+    apikeys.log_action(
+        key, "list_groups", f"domain={domain or 'all'} query={query or ''}", 200
+    )
     if domain:
         if domain not in AVAILABLE_DOMAINS:
             raise HTTPException(
@@ -121,12 +129,13 @@ def list_groups(
 @router.get("/groups/{group_email}/members")
 def list_members(
     group_email: str,
-    _: None = Depends(require_api_key),
+    key: dict = Depends(require_api_key),
     service=Depends(get_google_service),
 ):
     """List members of a group."""
     check_group_email(group_email)
     result = core.list_members(service, group_email)
+    apikeys.log_action(key, "list_members", group_email, 200 if result.success else 502)
     if not result.success:
         status = 404 if "not found" in (result.error or "").lower() else 502
         raise HTTPException(status_code=status, detail=result.error)
@@ -136,7 +145,7 @@ def list_members(
 @router.post("/groups", status_code=201)
 def create_group(
     body: CreateGroupRequest,
-    _: None = Depends(require_api_key),
+    key: dict = Depends(require_api_key),
     service=Depends(get_google_service),
 ):
     """Create a group and optionally add members (always as MEMBER)."""
@@ -165,7 +174,9 @@ def create_group(
         add_member_result(service, group_email, email) for email in body.members
     ]
     added = sum(1 for m in member_results if m["success"])
-    print(f"[api] created {group_email}, added {added}/{len(body.members)} members")
+    apikeys.log_action(
+        key, "create_group", f"{group_email} (+{added} members)", 201
+    )
 
     return {"email": group_email, "group": result.data, "members": member_results}
 
@@ -174,7 +185,7 @@ def create_group(
 def add_member(
     group_email: str,
     body: AddMemberRequest,
-    _: None = Depends(require_api_key),
+    key: dict = Depends(require_api_key),
     service=Depends(get_google_service),
 ):
     """Add a member to a group. Role is always MEMBER via the API."""
@@ -194,5 +205,5 @@ def add_member(
         status = 409 if "already exists" in (result.error or "").lower() else 502
         raise HTTPException(status_code=status, detail=result.error)
 
-    print(f"[api] added {body.email} to {group_email} as MEMBER")
+    apikeys.log_action(key, "add_member", f"{body.email} -> {group_email}", 201)
     return {"group": group_email, "added": body.email, "role": "MEMBER"}

@@ -49,7 +49,8 @@ docker-compose up -d
 | `GOOGLE_GROUP_DOMAIN` | Default domain for groups |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | Service account credentials as JSON |
 | `ALLOWED_DOMAIN` | Restrict sign-in to Google Workspace domains (comma-separated) |
-| `API_KEY` | Token for the `/api/*` automation endpoints (disabled if unset) |
+| `API_KEY` | Master token for `/api/*` (bootstrap/recovery) |
+| `API_KEYS_DB` | SQLite path for minted API keys (default `data/apikeys.db`) |
 
 You can also provide service account credentials via `service-account-credentials.json` in the project root.
 
@@ -96,8 +97,14 @@ Create a Google OAuth Web Application client and add these redirect URIs:
 
 - `GET /api/groups?domain=&query=`
 - `GET /api/groups/{email}/members`
-- `POST /api/groups` — `{name, domain?, description?, members?}` (members added as MEMBER)
+- `POST /api/groups` — `{name, domain?, description?, members?}` (members added as MEMBER, max 50)
 - `POST /api/groups/{email}/members` — `{email}` (MEMBER role only)
+
+### API keys (session auth)
+
+- `GET /keys` — list keys + audit log
+- `POST /keys` — mint a key `{name}` (shown once)
+- `POST /keys/{id}/revoke` — revoke a key
 
 ## Health Check
 

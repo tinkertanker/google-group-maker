@@ -12,9 +12,13 @@ services:
       VIRTUAL_HOST: groups.tk.sg
     volumes:
       - ./service-account-credentials.json:/app/service-account-credentials.json:ro
+      - groups-data:/app/data
     networks:
       devtksg:
     restart: always
+
+volumes:
+  groups-data:
 
 networks:
   devtksg:

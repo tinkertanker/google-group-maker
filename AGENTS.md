@@ -65,11 +65,14 @@ Gotchas:
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | web | OAuth credentials |
 | `ALLOWED_DOMAIN` | web | Comma-separated list of allowed login domains |
 | `SESSION_SECRET` | web | Session signing key |
-| `API_KEY` | web | Token for `/api/*` endpoints; API disabled if unset |
+| `API_KEY` | web | Master token for `/api/*` (bootstrap/recovery) |
+| `API_KEYS_DB` | web | SQLite path for minted keys (default `data/apikeys.db`, a Docker volume) |
 
 ## HTTP API
 
 Token-authenticated JSON API for automation (Slack workflows, scripts). Safe actions only — delete, rename, remove member and role changes stay in the web UI. Auth: `X-API-Key` header. Implemented in `web/routers/api.py`.
+
+Any logged-in user can mint keys at `/keys` — keys are stored hashed in `web/apikeys.py`'s SQLite DB, shown once at creation, and every API call is written to the audit log shown on that page. Revoke from `/keys`; the env `API_KEY` remains as a master key.
 
 ```bash
 # List groups / members

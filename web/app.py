@@ -25,7 +25,8 @@ from starlette.middleware.sessions import SessionMiddleware
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from web.routers import api, auth, groups, members
+from web import apikeys
+from web.routers import api, auth, groups, keys, members
 from web.dependencies import get_current_user, templates
 
 
@@ -33,6 +34,7 @@ from web.dependencies import get_current_user, templates
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
     # Startup
+    apikeys.init_db()
     print("Starting Google Group Maker web app...")
     yield
     # Shutdown
@@ -59,6 +61,7 @@ app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(groups.router, prefix="/groups", tags=["groups"])
 app.include_router(members.router, tags=["members"])
 app.include_router(api.router, prefix="/api", tags=["api"])
+app.include_router(keys.router, prefix="/keys", tags=["keys"])
 
 
 @app.get("/")

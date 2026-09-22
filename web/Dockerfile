@@ -30,6 +30,9 @@ COPY --from=builder /root/.local /home/app/.local
 COPY groupmaker_core.py ./
 COPY web/ ./web/
 
+# Data dir for SQLite (API keys) — mounted as a named volume in compose
+RUN mkdir -p /app/data
+
 # Set ownership
 RUN chown -R app:app /app
 

@@ -17,7 +17,9 @@ templates = Jinja2Templates(directory=Path(__file__).parent.parent / "templates"
 # OAuth configuration
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
-ALLOWED_DOMAIN = os.environ.get("ALLOWED_DOMAIN", "")
+ALLOWED_DOMAINS = [
+    d.strip() for d in os.environ.get("ALLOWED_DOMAIN", "").split(",") if d.strip()
+]
 
 # Set up OAuth
 oauth = OAuth()
@@ -95,12 +97,12 @@ async def auth_callback(request: Request):
 
     # Verify domain if configured
     email = user_info.get("email", "")
-    if ALLOWED_DOMAIN:
+    if ALLOWED_DOMAINS:
         user_domain = email.split("@")[-1] if "@" in email else ""
-        if user_domain != ALLOWED_DOMAIN:
+        if user_domain not in ALLOWED_DOMAINS:
             raise HTTPException(
                 status_code=403,
-                detail=f"Access denied. Only users from {ALLOWED_DOMAIN} are allowed."
+                detail=f"Access denied. Only users from {', '.join(ALLOWED_DOMAINS)} are allowed."
             )
 
     # Store user in session

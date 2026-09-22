@@ -63,7 +63,7 @@ Gotchas:
 | `GOOGLE_GROUP_DOMAIN` | no | Default group domain |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | no* | Service account JSON (*or use the credentials file) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | web | OAuth credentials |
-| `ALLOWED_DOMAIN` | web | Restrict logins to a domain |
+| `ALLOWED_DOMAIN` | web | Comma-separated list of allowed login domains |
 | `SESSION_SECRET` | web | Session signing key |
 
 ## Deployment

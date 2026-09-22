@@ -19,7 +19,9 @@ import groupmaker_core as core
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
 # Configuration
-ALLOWED_DOMAIN = os.environ.get("ALLOWED_DOMAIN", "")
+ALLOWED_DOMAINS = [
+    d.strip() for d in os.environ.get("ALLOWED_DOMAIN", "").split(",") if d.strip()
+]
 DEFAULT_DOMAIN = os.environ.get("GOOGLE_GROUP_DOMAIN", "tinkertanker.com")
 AVAILABLE_DOMAINS = ["tinkertanker.com", "swiftinsg.org", "tinkercademy.com"]
 

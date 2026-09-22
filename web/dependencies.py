@@ -21,7 +21,7 @@ templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 # Configuration
 ALLOWED_DOMAIN = os.environ.get("ALLOWED_DOMAIN", "")
 DEFAULT_DOMAIN = os.environ.get("GOOGLE_GROUP_DOMAIN", "tinkertanker.com")
-AVAILABLE_DOMAINS = ["tinkertanker.com", "swiftinsg.org"]
+AVAILABLE_DOMAINS = ["tinkertanker.com", "swiftinsg.org", "tinkercademy.com"]
 
 
 def get_current_user(request: Request) -> Optional[dict]:

@@ -25,7 +25,8 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -38,10 +39,12 @@ router = APIRouter()
 
 API_KEY = os.environ.get("API_KEY", "")
 
+# Registers the apiKey scheme in OpenAPI so /docs gets an Authorize button.
+api_key_scheme = APIKeyHeader(name="x-api-key", auto_error=False)
 
-def require_api_key(request: Request) -> dict:
+
+def require_api_key(provided: Optional[str] = Depends(api_key_scheme)) -> dict:
     """Require a valid X-API-Key header. Returns the matched key's info."""
-    provided = request.headers.get("x-api-key", "")
     if not provided:
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
     # Master key from env (bootstrap / recovery if the key DB is lost)

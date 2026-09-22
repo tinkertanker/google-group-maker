@@ -100,6 +100,8 @@ Create a Google OAuth Web Application client and add these redirect URIs:
 - `POST /api/groups` — `{name, domain?, description?, members?}` (members added as MEMBER, max 50)
 - `POST /api/groups/{email}/members` — `{email}` (MEMBER role only)
 
+Interactive docs at `/docs` (Swagger UI — Authorize with an API key to try endpoints) and `/redoc`; schema at `/openapi.json`.
+
 ### API keys (session auth)
 
 - `GET /keys` — list keys + audit log

@@ -74,6 +74,8 @@ Token-authenticated JSON API for automation (Slack workflows, scripts). Safe act
 
 Any logged-in user can mint keys at `/keys` — keys are stored hashed in `web/apikeys.py`'s SQLite DB, shown once at creation, and every API call is written to the audit log shown on that page. Revoke from `/keys`; the env `API_KEY` remains as a master key.
 
+Interactive docs: `/docs` (Swagger — click Authorize and paste a key to try endpoints), `/redoc`, `/openapi.json`. These are public; they expose schemas only.
+
 ```bash
 # List groups / members
 curl -H "X-API-Key: $API_KEY" "https://groups.tk.sg/api/groups?domain=tinkercademy.com"

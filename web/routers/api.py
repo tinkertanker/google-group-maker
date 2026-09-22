@@ -48,9 +48,13 @@ def require_api_key(request: Request) -> None:
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 
-def check_group_domain(group_email: str) -> None:
-    """Ensure a write targets a group in a domain we manage."""
-    domain = group_email.split("@")[-1] if "@" in group_email else ""
+def check_group_email(group_email: str) -> None:
+    """Ensure the target is a well-formed email in a domain we manage."""
+    if not core.validate_email(group_email):
+        raise HTTPException(
+            status_code=400, detail=f"Invalid group email: {group_email}"
+        )
+    domain = group_email.split("@")[-1]
     if domain not in AVAILABLE_DOMAINS:
         raise HTTPException(
             status_code=400,
@@ -73,7 +77,9 @@ class CreateGroupRequest(BaseModel):
     )
     description: str = ""
     members: list[str] = Field(
-        default_factory=list, description="Emails to add as MEMBER"
+        default_factory=list,
+        max_length=50,
+        description="Emails to add as MEMBER (max 50)",
     )
 
 
@@ -119,6 +125,7 @@ def list_members(
     service=Depends(get_google_service),
 ):
     """List members of a group."""
+    check_group_email(group_email)
     result = core.list_members(service, group_email)
     if not result.success:
         status = 404 if "not found" in (result.error or "").lower() else 502
@@ -157,6 +164,8 @@ def create_group(
     member_results = [
         add_member_result(service, group_email, email) for email in body.members
     ]
+    added = sum(1 for m in member_results if m["success"])
+    print(f"[api] created {group_email}, added {added}/{len(body.members)} members")
 
     return {"email": group_email, "group": result.data, "members": member_results}
 
@@ -169,7 +178,7 @@ def add_member(
     service=Depends(get_google_service),
 ):
     """Add a member to a group. Role is always MEMBER via the API."""
-    check_group_domain(group_email)
+    check_group_email(group_email)
 
     if not core.validate_email(body.email):
         raise HTTPException(status_code=400, detail=f"Invalid email: {body.email}")
@@ -185,4 +194,5 @@ def add_member(
         status = 409 if "already exists" in (result.error or "").lower() else 502
         raise HTTPException(status_code=status, detail=result.error)
 
+    print(f"[api] added {body.email} to {group_email} as MEMBER")
     return {"group": group_email, "added": body.email, "role": "MEMBER"}

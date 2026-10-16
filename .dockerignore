@@ -1,0 +1,9 @@
+.git
+node_modules
+deploy/cloudflare/node_modules
+venv
+.env
+service-account-credentials.json
+*.pyc
+__pycache__
+data

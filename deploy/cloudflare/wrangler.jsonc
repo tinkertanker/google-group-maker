@@ -1,0 +1,42 @@
+// groups.tk.sg: Worker in front of one Cloudflare Container running
+// web/Dockerfile unchanged. See README.md.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "google-group-maker",
+  "account_id": "b8b1032c61d9475cd00229c74db7ec72",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-16",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "groups.tk.sg", "custom_domain": true }],
+  "containers": [
+    {
+      "class_name": "GroupMaker",
+      // Paths are relative to this file; the build context is the repo root,
+      // as in docker-compose.yml.
+      "image": "../../web/Dockerfile",
+      "image_build_context": "../..",
+      // 1/4 vCPU, 1 GiB — plenty for uvicorn + the Google Admin SDK.
+      "instance_type": "basic",
+      // Minted API keys live in a per-instance SQLite file, so one container.
+      "max_instances": 1,
+      // Users are in Singapore; without this the container may be placed far away.
+      "constraints": { "regions": ["APAC"] }
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "GROUP_MAKER", "class_name": "GroupMaker" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GroupMaker"] }],
+  "vars": {
+    "GOOGLE_GROUP_DOMAIN": "tinkertanker.com",
+    // Login is limited to these Workspace domains (same list as
+    // AVAILABLE_DOMAINS in web/dependencies.py).
+    "ALLOWED_DOMAIN": "tinkertanker.com,swiftinsg.org,tinkercademy.com"
+  },
+  // Secrets (wrangler secret put): DEFAULT_EMAIL, ADMIN_EMAIL, SESSION_SECRET,
+  // API_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
+  // GOOGLE_SERVICE_ACCOUNT_JSON. They reach the container through
+  // GroupMaker.envVars.
+  "observability": { "enabled": true }
+}

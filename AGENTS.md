@@ -94,7 +94,7 @@ curl -X POST -H "X-API-Key: $API_KEY" -H "Content-Type: application/json" \
 
 ## Deployment
 
-`docker-compose.yml` builds `web/Dockerfile` and serves the app at groups.tk.sg behind nginx-proxy (`VIRTUAL_HOST`). Deploy = push to `main`, then pull and `docker compose up -d --build` on the server (see local `deploy.sh`, gitignored).
+Production is a Cloudflare Worker + single Cloudflare Container running `web/Dockerfile` unchanged — see `deploy/cloudflare/` (`wrangler.jsonc`, `src/index.ts`, README with token scopes and the secrets list). Deploy = `cd deploy/cloudflare && npm run deploy` with `CLOUDFLARE_API_TOKEN` set; secrets via `wrangler secret put` reach the container through `GroupMaker.envVars`. The old `docker-compose.yml`/nginx-proxy path is kept for reference/self-hosting only.
 
 ## Git
 

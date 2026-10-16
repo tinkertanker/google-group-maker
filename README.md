@@ -42,7 +42,7 @@ Open `http://localhost:8000`.
 
 ### Production (Cloudflare)
 
-groups.tk.sg runs as a Cloudflare Worker in front of one Cloudflare Container.
+The app runs as a Cloudflare Worker in front of one Cloudflare Container.
 See [deploy/cloudflare/README.md](deploy/cloudflare/README.md) for the deploy,
 secrets and rollback runbook.
 

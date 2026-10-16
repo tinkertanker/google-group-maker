@@ -1,12 +1,14 @@
 # Cloudflare hosting
 
-`groups.tk.sg` runs on Cloudflare as a Worker in front of one
+The app runs on Cloudflare as a Worker in front of one
 [Cloudflare Container](https://developers.cloudflare.com/containers/) running
 [`web/Dockerfile`](../../web/Dockerfile) unchanged — the same image the old
 `docker-compose.yml`/nginx-proxy deployment built.
 
-Account: Tinkertanker (`b8b1032c61d9475cd00229c74db7ec72`); zone `tk.sg`.
 This directory is a standalone npm project, not part of any workspace.
+
+Throughout this runbook, `<hostname>` is the app's public hostname and
+`<zone>` is the Cloudflare zone it lives under.
 
 ## How it maps from the Docker setup
 
@@ -19,7 +21,7 @@ This directory is a standalone npm project, not part of any workspace.
   next morning's first request waits a few seconds for boot.
 - **Forwarded headers.** The Worker sets `X-Forwarded-Proto`/`Host`/`For`;
   the app's OAuth redirect URI is built from them, so callbacks stay on
-  `https://groups.tk.sg/auth/callback`.
+  `https://<hostname>/auth/callback`.
 - **Secrets into the container.** Worker `vars` and secrets reach the
   container through `GroupMaker.envVars` in [`src/index.ts`](src/index.ts).
   On the first request after they change, the running container is restarted
@@ -30,18 +32,17 @@ This directory is a standalone npm project, not part of any workspace.
 
 `CLOUDFLARE_API_TOKEN` for deploys and rollback needs:
 
-- **Account (Tinkertanker):**
+- **Account:**
   - Workers Scripts: Edit (covers Durable Objects and Worker secrets)
   - Containers: Edit (pushes to `registry.cloudflare.com` and creates the
     container application)
   - Account Settings: Read
-- **Zone `tk.sg`:**
+- **Zone `<zone>`:**
   - Workers Routes: Edit (custom domains)
   - DNS: Edit (only needed to restore the old CNAME on rollback)
   - Zone: Read
 
-Workers Paid is required for Containers. This is the same permission set
-`classroom-widgets` documents for `go.tk.sg` deploys.
+Workers Paid is required for Containers.
 
 ## Deploy
 
@@ -50,7 +51,7 @@ with Docker that builds `linux/amd64`.
 
 ```sh
 cd deploy/cloudflare
-export CLOUDFLARE_ACCOUNT_ID=b8b1032c61d9475cd00229c74db7ec72
+export CLOUDFLARE_ACCOUNT_ID=<your-account-id>
 export CLOUDFLARE_API_TOKEN=...            # see "Token permissions"
 npm install
 
@@ -67,7 +68,7 @@ Write the secrets to a file outside the repo, readable only by you:
 ```sh
 umask 077
 cat > /tmp/groups.secrets <<'EOF'
-DEFAULT_EMAIL=<admin user email, e.g. yjsoon@tinkertanker.com>
+DEFAULT_EMAIL=<admin user email>
 ADMIN_EMAIL=<same, or the Workspace super-admin to delegate to>
 SESSION_SECRET=<openssl rand -hex 32>
 API_KEY=<openssl rand -hex 32>
@@ -79,7 +80,7 @@ EOF
 
 - `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`: the OAuth 2.0 Web Application
   client already used by the old deployment. Its authorised redirect URI
-  `https://groups.tk.sg/auth/callback` is unchanged, so no Google Console
+  `https://<hostname>/auth/callback` is unchanged, so no Google Console
   change is needed.
 - `GOOGLE_SERVICE_ACCOUNT_JSON`: the domain-wide-delegation service account
   JSON — the same value the Docker host had in
@@ -89,9 +90,9 @@ EOF
 
 ### 2. Deploy
 
-`groups.tk.sg` has no DNS record of its own — the `*.tk.sg` wildcard CNAME
-covered it — so there is nothing to delete first. A Workers custom domain
-takes precedence over the wildcard.
+If the hostname was previously covered by a wildcard record pointing at the
+old host, there is nothing to delete first — a Workers custom domain takes
+precedence over the wildcard.
 
 ```sh
 npx wrangler deploy -c wrangler.jsonc --secrets-file /tmp/groups.secrets
@@ -100,15 +101,15 @@ rm -f /tmp/groups.secrets
 
 `wrangler deploy` builds the image, pushes it, creates the container
 application and the Durable Object class (migration `v1`), and binds
-`groups.tk.sg`. The first container takes a few minutes to provision; until
+`<hostname>`. The first container takes a few minutes to provision; until
 then requests return 503. Watch with `npx wrangler containers list` and
 `npx wrangler tail google-group-maker`.
 
 ### 3. Verify
 
 ```sh
-curl -s https://groups.tk.sg/health          # {"status":"ok"}
-curl -sI https://groups.tk.sg/               # 302 -> /auth/login
+curl -s https://<hostname>/health          # {"status":"ok"}
+curl -sI https://<hostname>/               # 302 -> /auth/login
 ```
 
 The login page renders an "OAuth not configured" error until
@@ -126,9 +127,9 @@ declaring victory. Then log in once through Google.
   version; the container then restarts with the new secrets on the next
   request.
 - **Rollback:** `npx wrangler rollback -c wrangler.jsonc`. To leave
-  Cloudflare entirely, delete the `groups.tk.sg` worker domain
-  (`DELETE /accounts/{acct}/workers/domains/{id}`); the wildcard CNAME then
-  resolves the name to `office.tk.sg` again — no DNS record to restore.
+  Cloudflare entirely, delete the `<hostname>` worker domain
+  (`DELETE /accounts/{acct}/workers/domains/{id}`); the wildcard record then
+  resolves the name to the old host again — no DNS record to restore.
 
 ## Caveats
 

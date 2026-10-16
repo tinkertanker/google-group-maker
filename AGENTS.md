@@ -78,18 +78,18 @@ Interactive docs: `/docs` (Swagger — click Authorize and paste a key to try en
 
 ```bash
 # List groups / members
-curl -H "X-API-Key: $API_KEY" "https://groups.tk.sg/api/groups?domain=tinkercademy.com"
-curl -H "X-API-Key: $API_KEY" "https://groups.tk.sg/api/groups/name@domain.com/members"
+curl -H "X-API-Key: $API_KEY" "https://<app-host>/api/groups?domain=tinkercademy.com"
+curl -H "X-API-Key: $API_KEY" "https://<app-host>/api/groups/name@domain.com/members"
 
 # Create a group (members added as MEMBER)
 curl -X POST -H "X-API-Key: $API_KEY" -H "Content-Type: application/json" \
   -d '{"name":"new-group","domain":"tinkertanker.com","members":["a@b.com"]}' \
-  https://groups.tk.sg/api/groups
+  https://<app-host>/api/groups
 
 # Add a member (MEMBER role only)
 curl -X POST -H "X-API-Key: $API_KEY" -H "Content-Type: application/json" \
   -d '{"email":"a@b.com"}' \
-  https://groups.tk.sg/api/groups/name@domain.com/members
+  https://<app-host>/api/groups/name@domain.com/members
 ```
 
 ## Deployment

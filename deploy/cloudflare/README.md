@@ -119,9 +119,12 @@ declaring victory. Then log in once through Google.
 
 - **Deploy:** push your branch, merge, then `npm run deploy` from the merge
   commit on a machine with Docker. Secrets persist across deploys.
-- **Secret changes:** `npx wrangler secret put NAME --name google-group-maker`.
-  The env-fingerprint check restarts the container on the next request, so
-  new values apply within a couple of minutes.
+- **Secret changes:** `npx wrangler secret put NAME --name google-group-maker`
+  (or `secret bulk <file>`). A warm Durable Object keeps the env it was
+  constructed with, so the env-fingerprint check may not notice the change —
+  run a no-op `wrangler deploy` afterwards to force the object onto the new
+  version; the container then restarts with the new secrets on the next
+  request.
 - **Rollback:** `npx wrangler rollback -c wrangler.jsonc`. To leave
   Cloudflare entirely, delete the `groups.tk.sg` worker domain
   (`DELETE /accounts/{acct}/workers/domains/{id}`); the wildcard CNAME then

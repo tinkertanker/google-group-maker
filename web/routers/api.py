@@ -32,7 +32,7 @@ from pydantic import BaseModel, Field
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import groupmaker_core as core
-from web import apikeys
+from web import alerts, apikeys
 from web.dependencies import AVAILABLE_DOMAINS, DEFAULT_DOMAIN, get_google_service
 
 router = APIRouter()
@@ -46,14 +46,22 @@ api_key_scheme = APIKeyHeader(name="x-api-key", auto_error=False)
 def require_api_key(provided: Optional[str] = Depends(api_key_scheme)) -> dict:
     """Require a valid X-API-Key header. Returns the matched key's info."""
     if not provided:
+        alerts.notify_auth_failure("missing X-API-Key header")
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
     # Master key from env (bootstrap / recovery if the key DB is lost)
     if API_KEY and hmac.compare_digest(provided.encode(), API_KEY.encode()):
         return {"id": None, "name": "env API_KEY", "prefix": "env"}
     key = apikeys.lookup_key(provided)
     if not key:
+        alerts.notify_auth_failure(f"invalid or revoked key ({provided[:12]}…)")
         raise HTTPException(status_code=401, detail="Invalid or revoked API key")
     return key
+
+
+def _record(key: dict, action: str, detail: str, status: int) -> None:
+    """Write the audit row and fire the Slack alert for one API call."""
+    apikeys.log_action(key, action, detail, status)
+    alerts.notify_api_use(key, action, detail, status)
 
 
 def check_group_email(group_email: str) -> None:
@@ -103,7 +111,7 @@ def list_groups(
     service=Depends(get_google_service),
 ):
     """List groups across allowed domains, optionally filtered."""
-    apikeys.log_action(
+    _record(
         key, "list_groups", f"domain={domain or 'all'} query={query or ''}", 200
     )
     if domain:
@@ -138,7 +146,7 @@ def list_members(
     """List members of a group."""
     check_group_email(group_email)
     result = core.list_members(service, group_email)
-    apikeys.log_action(key, "list_members", group_email, 200 if result.success else 502)
+    _record(key, "list_members", group_email, 200 if result.success else 502)
     if not result.success:
         status = 404 if "not found" in (result.error or "").lower() else 502
         raise HTTPException(status_code=status, detail=result.error)
@@ -177,7 +185,7 @@ def create_group(
         add_member_result(service, group_email, email) for email in body.members
     ]
     added = sum(1 for m in member_results if m["success"])
-    apikeys.log_action(
+    _record(
         key, "create_group", f"{group_email} (+{added} members)", 201
     )
 
@@ -208,5 +216,5 @@ def add_member(
         status = 409 if "already exists" in (result.error or "").lower() else 502
         raise HTTPException(status_code=status, detail=result.error)
 
-    apikeys.log_action(key, "add_member", f"{body.email} -> {group_email}", 201)
+    _record(key, "add_member", f"{body.email} -> {group_email}", 201)
     return {"group": group_email, "added": body.email, "role": "MEMBER"}

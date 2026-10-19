@@ -87,6 +87,9 @@ EOF
   `service-account-credentials.json`, on one line.
 - `API_KEY` is the master `/api/*` token. Generate a fresh one; minted keys
   from the old deployment are gone with the old volume anyway.
+- `SLACK_WEBHOOK_URL` (optional): a Slack incoming webhook; every `/api/*`
+  call and rejected key posts an alert to it. Add it to the secrets file
+  above if you want alerts.
 
 ### 2. Deploy
 

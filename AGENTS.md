@@ -67,6 +67,7 @@ Gotchas:
 | `SESSION_SECRET` | web | Session signing key |
 | `API_KEY` | web | Master token for `/api/*` (bootstrap/recovery) |
 | `API_KEYS_DB` | web | SQLite path for minted keys (default `data/apikeys.db`, a Docker volume) |
+| `SLACK_WEBHOOK_URL` | web | Slack incoming webhook — every `/api/*` call and rejected key posts an alert (optional; `web/alerts.py`) |
 
 ## HTTP API
 

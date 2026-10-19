@@ -60,7 +60,11 @@ def require_api_key(provided: Optional[str] = Depends(api_key_scheme)) -> dict:
 
 def _record(key: dict, action: str, detail: str, status: int) -> None:
     """Write the audit row and fire the Slack alert for one API call."""
-    apikeys.log_action(key, action, detail, status)
+    try:
+        apikeys.log_action(key, action, detail, status)
+    except Exception as exc:
+        # A lost audit row must not mask the real response (e.g. _fail's 4xx).
+        print(f"api audit write failed: {exc}", file=sys.stderr)
     alerts.notify_api_use(key, action, detail, status)
 
 

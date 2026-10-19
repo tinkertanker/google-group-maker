@@ -64,17 +64,24 @@ def _record(key: dict, action: str, detail: str, status: int) -> None:
     alerts.notify_api_use(key, action, detail, status)
 
 
-def check_group_email(group_email: str) -> None:
+def _fail(key: dict, action: str, detail: str, status: int, message: str) -> None:
+    """Audit and alert a rejected authenticated call, then raise."""
+    _record(key, action, detail, status)
+    raise HTTPException(status_code=status, detail=message)
+
+
+def check_group_email(group_email: str, key: dict, action: str) -> None:
     """Ensure the target is a well-formed email in a domain we manage."""
     if not core.validate_email(group_email):
-        raise HTTPException(
-            status_code=400, detail=f"Invalid group email: {group_email}"
-        )
+        _fail(key, action, group_email, 400, f"Invalid group email: {group_email}")
     domain = group_email.split("@")[-1]
     if domain not in AVAILABLE_DOMAINS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Group domain must be one of: {', '.join(AVAILABLE_DOMAINS)}",
+        _fail(
+            key,
+            action,
+            group_email,
+            400,
+            f"Group domain must be one of: {', '.join(AVAILABLE_DOMAINS)}",
         )
 
 
@@ -111,18 +118,15 @@ def list_groups(
     service=Depends(get_google_service),
 ):
     """List groups across allowed domains, optionally filtered."""
-    _record(
-        key, "list_groups", f"domain={domain or 'all'} query={query or ''}", 200
-    )
-    if domain:
-        if domain not in AVAILABLE_DOMAINS:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Domain must be one of: {', '.join(AVAILABLE_DOMAINS)}",
-            )
-        domains = [domain]
-    else:
-        domains = AVAILABLE_DOMAINS
+    if domain and domain not in AVAILABLE_DOMAINS:
+        _fail(
+            key,
+            "list_groups",
+            f"domain={domain}",
+            400,
+            f"Domain must be one of: {', '.join(AVAILABLE_DOMAINS)}",
+        )
+    domains = [domain] if domain else AVAILABLE_DOMAINS
 
     groups = []
     errors = {}
@@ -134,6 +138,9 @@ def list_groups(
             errors[d] = result.error
 
     groups.sort(key=lambda g: g.get("email", "").lower())
+    _record(
+        key, "list_groups", f"domain={domain or 'all'} query={query or ''}", 200
+    )
     return {"groups": groups, "count": len(groups), "errors": errors or None}
 
 
@@ -144,12 +151,12 @@ def list_members(
     service=Depends(get_google_service),
 ):
     """List members of a group."""
-    check_group_email(group_email)
+    check_group_email(group_email, key, "list_members")
     result = core.list_members(service, group_email)
-    _record(key, "list_members", group_email, 200 if result.success else 502)
     if not result.success:
         status = 404 if "not found" in (result.error or "").lower() else 502
-        raise HTTPException(status_code=status, detail=result.error)
+        _fail(key, "list_members", group_email, status, result.error)
+    _record(key, "list_members", group_email, 200)
     return result.data
 
 
@@ -162,13 +169,16 @@ def create_group(
     """Create a group and optionally add members (always as MEMBER)."""
     validation = core.validate_group_name(body.name)
     if not validation.valid:
-        raise HTTPException(status_code=400, detail=validation.error)
+        _fail(key, "create_group", body.name, 400, validation.error)
 
     domain = validation.domain or body.domain or DEFAULT_DOMAIN
     if domain not in AVAILABLE_DOMAINS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Domain must be one of: {', '.join(AVAILABLE_DOMAINS)}",
+        _fail(
+            key,
+            "create_group",
+            body.name,
+            400,
+            f"Domain must be one of: {', '.join(AVAILABLE_DOMAINS)}",
         )
 
     result = core.create_group(
@@ -176,7 +186,7 @@ def create_group(
     )
     if not result.success:
         status = 409 if "already exists" in (result.error or "").lower() else 502
-        raise HTTPException(status_code=status, detail=result.error)
+        _fail(key, "create_group", body.name, status, result.error)
 
     group_email = f"{validation.group_name}@{domain}"
     core.ensure_group_exists(service, group_email)
@@ -200,21 +210,20 @@ def add_member(
     service=Depends(get_google_service),
 ):
     """Add a member to a group. Role is always MEMBER via the API."""
-    check_group_email(group_email)
+    check_group_email(group_email, key, "add_member")
+    target = f"{body.email} -> {group_email}"
 
     if not core.validate_email(body.email):
-        raise HTTPException(status_code=400, detail=f"Invalid email: {body.email}")
+        _fail(key, "add_member", target, 400, f"Invalid email: {body.email}")
 
     check = core.get_group(service, group_email)
     if not check.success:
-        raise HTTPException(
-            status_code=404, detail=f"Group not found: {group_email}"
-        )
+        _fail(key, "add_member", target, 404, f"Group not found: {group_email}")
 
     result = core.add_member(service, group_email, body.email, role="MEMBER")
     if not result.success:
         status = 409 if "already exists" in (result.error or "").lower() else 502
-        raise HTTPException(status_code=status, detail=result.error)
+        _fail(key, "add_member", target, status, result.error)
 
-    _record(key, "add_member", f"{body.email} -> {group_email}", 201)
+    _record(key, "add_member", target, 201)
     return {"group": group_email, "added": body.email, "role": "MEMBER"}

@@ -36,7 +36,7 @@
   },
   // Secrets (wrangler secret put): DEFAULT_EMAIL, ADMIN_EMAIL, SESSION_SECRET,
   // API_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
-  // GOOGLE_SERVICE_ACCOUNT_JSON. They reach the container through
-  // GroupMaker.envVars.
+  // GOOGLE_SERVICE_ACCOUNT_JSON, SLACK_WEBHOOK_URL (optional).
+  // They reach the container through GroupMaker.envVars.
   "observability": { "enabled": true }
 }

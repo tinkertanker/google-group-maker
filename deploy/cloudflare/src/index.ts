@@ -19,6 +19,7 @@ interface Env {
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   GOOGLE_SERVICE_ACCOUNT_JSON?: string;
+  SLACK_WEBHOOK_URL?: string;
 }
 
 const INSTANCE_NAME = 'main';
@@ -41,6 +42,7 @@ export class GroupMaker extends Container<Env> {
       GOOGLE_CLIENT_ID: env.GOOGLE_CLIENT_ID,
       GOOGLE_CLIENT_SECRET: env.GOOGLE_CLIENT_SECRET,
       GOOGLE_SERVICE_ACCOUNT_JSON: env.GOOGLE_SERVICE_ACCOUNT_JSON,
+      SLACK_WEBHOOK_URL: env.SLACK_WEBHOOK_URL,
     };
     this.envVars = {
       GOOGLE_GROUP_DOMAIN: env.GOOGLE_GROUP_DOMAIN,

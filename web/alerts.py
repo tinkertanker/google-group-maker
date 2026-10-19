@@ -1,25 +1,31 @@
 """Slack alerting for /api/* use.
 
 Set SLACK_WEBHOOK_URL (a Slack incoming webhook) to get a message on every
-authenticated API call and on rejected keys. Alerts are best-effort: a
-missing URL or a failed POST never breaks the API call itself.
+authenticated API call and on rejected keys. Alerts are fire-and-forget on a
+daemon thread so a Slack outage never delays the API call itself.
 """
 
 import os
+import threading
 
 import httpx
 
 SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "")
 
 
-def send_slack_alert(text: str) -> None:
+def _post(text: str) -> None:
     """POST to the Slack incoming webhook. Never raises."""
-    if not SLACK_WEBHOOK_URL:
-        return
     try:
         httpx.post(SLACK_WEBHOOK_URL, json={"text": text}, timeout=5)
     except Exception:
         pass
+
+
+def send_slack_alert(text: str) -> None:
+    """Queue an alert in the background; returns immediately."""
+    if not SLACK_WEBHOOK_URL:
+        return
+    threading.Thread(target=_post, args=(text,), daemon=True).start()
 
 
 def notify_api_use(key: dict, action: str, detail: str, status: int) -> None:

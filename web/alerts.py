@@ -47,12 +47,11 @@ def send_slack_alert(text: str) -> None:
         pass
 
 
-def notify_api_use(key: dict, action: str, detail: str, status: int) -> None:
-    """Alert that an API key was used. Called alongside apikeys.log_action."""
+def notify_api_use(key: dict, message: str, status: int) -> None:
+    """Alert that an API key was used. `message` is a verb phrase, e.g.
+    'added a@b.com to g@domain', so it reads '<key> added a@b.com to …'."""
     key_label = (key or {}).get("name") or "unknown key"
-    send_slack_alert(
-        f"[groups.tk.sg] `{action}` by {key_label} — {detail} (HTTP {status})"
-    )
+    send_slack_alert(f"[groups.tk.sg] {key_label} {message} (HTTP {status})")
 
 
 def notify_auth_failure(reason: str) -> None:

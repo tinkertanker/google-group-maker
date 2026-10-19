@@ -86,7 +86,14 @@ def _fail(
 def check_group_email(group_email: str, key: dict, action: str) -> None:
     """Ensure the target is a well-formed email in a domain we manage."""
     if not core.validate_email(group_email):
-        _fail(key, action, group_email, 400, f"Invalid group email: {group_email}")
+        _fail(
+            key,
+            action,
+            group_email,
+            400,
+            f"Invalid group email: {group_email}",
+            alert=f"rejected {group_email}: invalid group email",
+        )
     domain = group_email.split("@")[-1]
     if domain not in AVAILABLE_DOMAINS:
         _fail(
@@ -95,6 +102,7 @@ def check_group_email(group_email: str, key: dict, action: str) -> None:
             group_email,
             400,
             f"Group domain must be one of: {', '.join(AVAILABLE_DOMAINS)}",
+            alert=f"rejected {group_email}: bad domain",
         )
 
 
@@ -138,6 +146,7 @@ def list_groups(
             f"domain={domain}",
             400,
             f"Domain must be one of: {', '.join(AVAILABLE_DOMAINS)}",
+            alert=f"tried to list groups with bad domain {domain}",
         )
     domains = [domain] if domain else AVAILABLE_DOMAINS
 
@@ -152,12 +161,15 @@ def list_groups(
 
     groups.sort(key=lambda g: g.get("email", "").lower())
     scope = f"domain={domain or 'all'}" + (f" query={query}" if query else "")
+    alert = f"listed {len(groups)} group(s) ({scope})"
+    if errors:
+        alert += f"; lookup failed for {', '.join(errors)}"
     _record(
         key,
         "list_groups",
         f"domain={domain or 'all'} query={query or ''}",
         200,
-        alert=f"listed {len(groups)} group(s) ({scope})",
+        alert=alert,
     )
     return {"groups": groups, "count": len(groups), "errors": errors or None}
 
@@ -235,7 +247,7 @@ def create_group(
             body.name,
             status,
             result.error,
-            alert=f"failed to create group {body.name}@{domain}: {result.error}",
+            alert=f"failed to create group {validation.group_name}@{domain}: {result.error}",
         )
 
     group_email = f"{validation.group_name}@{domain}"

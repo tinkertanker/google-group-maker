@@ -40,17 +40,35 @@ uvicorn web.app:app --reload
 
 Open `http://localhost:8000`.
 
-### Production (Cloudflare)
+### Production (Docker host)
 
-The app runs as a Cloudflare Worker in front of one Cloudflare Container.
-See [deploy/cloudflare/README.md](deploy/cloudflare/README.md) for the deploy,
-secrets and rollback runbook.
+Production runs `docker-compose.yml` on the office Docker host, behind the
+host's nginx-proxy (external `devtksg` network; `VIRTUAL_HOST` routes the
+hostname and the proxy terminates TLS). The checkout on that host holds:
 
-### Docker deployment (self-hosted)
+- `.env`: the web app settings and secrets (see Configuration below), including
+  the master `API_KEY` and the optional `SLACK_WEBHOOK_URL`
+- `service-account-credentials.json`: the domain-wide-delegation service
+  account, mounted read-only
+- the `groups-data` named volume: `data/apikeys.db`, the minted API keys and
+  their audit log. Keep it; recreating the container does not touch it.
+
+Deploy from `main`:
 
 ```bash
-docker-compose up -d
+docker tag groups-groups:latest groups-groups:rollback-$(git rev-parse --short HEAD)
+git pull --ff-only
+docker compose up -d --build
+curl -s https://<hostname>/health   # {"status":"ok"}
 ```
+
+Roll back with `git checkout <previous sha>` and
+`docker compose up -d --build`, or retag the saved image as
+`groups-groups:latest` and run `docker compose up -d --no-build`.
+After changing `.env`, run `docker compose up -d` so the container picks it up.
+
+[deploy/cloudflare/](deploy/cloudflare/README.md) is a retired Cloudflare
+setup kept only for rollback; it is not production.
 
 ## Configuration
 

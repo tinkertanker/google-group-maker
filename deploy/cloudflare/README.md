@@ -1,4 +1,11 @@
-# Cloudflare hosting
+# Cloudflare hosting (retired; rollback only)
+
+> **Not production.** Production moved back to `docker-compose.yml` on the
+> Docker host on 2026-10-21 (see the top-level README, "Production"). The
+> Worker custom domain was removed and the container application deleted.
+> `wrangler.jsonc` has no `routes` and `npm run deploy` refuses to run, so a
+> deploy from here cannot take the hostname back by accident. To return to
+> Cloudflare deliberately, follow "Returning to Cloudflare" below.
 
 The app runs on Cloudflare as a Worker in front of one
 [Cloudflare Container](https://developers.cloudflare.com/containers/) running
@@ -133,6 +140,22 @@ declaring victory. Then log in once through Google.
   Cloudflare entirely, delete the `<hostname>` worker domain
   (`DELETE /accounts/{acct}/workers/domains/{id}`); the wildcard record then
   resolves the name to the old host again — no DNS record to restore.
+
+## Returning to Cloudflare
+
+The Worker and its secrets were left in place, without a route, so this is a
+deploy rather than a rebuild of the secrets:
+
+1. Check the Worker secrets still match the Docker host's `.env`
+   (`npx wrangler secret list --name google-group-maker`). Minted keys in the
+   Docker host's `groups-data` volume do not carry over.
+2. Add `"routes": [{ "pattern": "<hostname>", "custom_domain": true }]` back to
+   `wrangler.jsonc`.
+3. `npx wrangler deploy -c wrangler.jsonc` (the `npm run deploy` script is
+   disabled on purpose). This recreates the container application and binds
+   the hostname, which takes precedence over the wildcard record.
+4. Stop the Docker host's container (`docker compose stop`) once
+   `https://<hostname>/health` is served by the Worker.
 
 ## Caveats
 

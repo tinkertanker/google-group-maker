@@ -95,7 +95,9 @@ curl -X POST -H "X-API-Key: $API_KEY" -H "Content-Type: application/json" \
 
 ## Deployment
 
-Production is a Cloudflare Worker + single Cloudflare Container running `web/Dockerfile` unchanged — see `deploy/cloudflare/` (`wrangler.jsonc`, `src/index.ts`, README with token scopes and the secrets list). Deploy = `cd deploy/cloudflare && npm run deploy` with `CLOUDFLARE_API_TOKEN` set; secrets via `wrangler secret put` reach the container through `GroupMaker.envVars`. The old `docker-compose.yml`/nginx-proxy path is kept for reference/self-hosting only.
+Production is `docker-compose.yml` on the office Docker host, behind its nginx-proxy (`devtksg` network, `VIRTUAL_HOST`), with config in the checkout's `.env` and `service-account-credentials.json` and minted keys in the `groups-data` volume. See README "Production". Deploy = `git pull --ff-only && docker compose up -d --build` in that checkout.
+
+`deploy/cloudflare/` is a retired Cloudflare Worker + Container setup kept only for rollback. It has no route and `npm run deploy` refuses to run, so nothing there can take the hostname back by accident. Do not re-add the route without an explicit decision to move production; see its README.
 
 ## Git
 

@@ -157,7 +157,10 @@ retirement. Those values may since have drifted from the Docker host:
    `secret put`), using a file outside the repo created with `umask 077`:
    every secret named in `wrangler.jsonc`, from the host's `.env`, with
    `GOOGLE_SERVICE_ACCOUNT_JSON` set to `service-account-credentials.json` on
-   one line. Delete the file afterwards. Minted keys in the host's
+   one line. Delete the file afterwards. `secret bulk` does not remove names
+   missing from the file, so compare `secret list` with the host's `.env` and
+   `npx wrangler secret delete NAME --name google-group-maker` any the host no
+   longer uses (for example `SLACK_WEBHOOK_URL`). Minted keys in the host's
    `groups-data` volume do not carry over; their clients need the master key
    or new keys.
 2. Add `"routes": [{ "pattern": "<hostname>", "custom_domain": true }]` back to

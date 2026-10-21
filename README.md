@@ -68,7 +68,8 @@ curl -s https://<hostname>/health   # {"status":"ok"}
 ```
 
 Roll back with `git checkout <previous sha>` and
-`docker compose up -d --build`, or retag the saved image as
+`docker compose up -d --build` (run `git switch main` before the next deploy,
+since the checkout detaches HEAD), or retag the saved image as
 `groups-groups:latest` and run `docker compose up -d --no-build`.
 After changing `.env`, run `docker compose up -d` so the container picks it up.
 

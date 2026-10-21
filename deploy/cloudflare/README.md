@@ -1,9 +1,17 @@
-# Cloudflare hosting
+# Cloudflare hosting (retired; rollback only)
 
-The app runs on Cloudflare as a Worker in front of one
-[Cloudflare Container](https://developers.cloudflare.com/containers/) running
-[`web/Dockerfile`](../../web/Dockerfile) unchanged — the same image the old
-`docker-compose.yml`/nginx-proxy deployment built.
+> **Not production.** Production moved back to `docker-compose.yml` on the
+> Docker host on 2026-10-21 (see the top-level README, "Production"). The
+> Worker custom domain was removed and the container application deleted.
+> `wrangler.jsonc` has no `routes` and `npm run deploy` refuses to run, so a
+> deploy from here cannot take the hostname back by accident. To return to
+> Cloudflare deliberately, follow "Returning to Cloudflare" below; it is the
+> only supported procedure. "Original setup" is history, not a runbook.
+
+From 2026-10-16 to 2026-10-21 the app ran on Cloudflare as a Worker in front of
+one [Cloudflare Container](https://developers.cloudflare.com/containers/)
+running [`web/Dockerfile`](../../web/Dockerfile) unchanged, the same image
+`docker-compose.yml` builds.
 
 This directory is a standalone npm project, not part of any workspace.
 
@@ -44,7 +52,10 @@ Throughout this runbook, `<hostname>` is the app's public hostname and
 
 Workers Paid is required for Containers.
 
-## Deploy
+## Original setup (historical)
+
+This is how the Cloudflare deployment was first created. Do not follow it to
+return to Cloudflare: it predates the retirement and assumes a fresh master key.
 
 Run this from a clean checkout of the commit you are deploying, on a machine
 with Docker that builds `linux/amd64`.
@@ -85,8 +96,8 @@ EOF
 - `GOOGLE_SERVICE_ACCOUNT_JSON`: the domain-wide-delegation service account
   JSON — the same value the Docker host had in
   `service-account-credentials.json`, on one line.
-- `API_KEY` is the master `/api/*` token. Generate a fresh one; minted keys
-  from the old deployment are gone with the old volume anyway.
+- `API_KEY` is the master `/api/*` token. At first setup a fresh one was
+  generated; when returning, reuse the Docker host's `.env` value instead.
 - `SLACK_WEBHOOK_URL` (optional): a Slack incoming webhook; every `/api/*`
   call and rejected key posts an alert to it. Add it to the secrets file
   above if you want alerts.
@@ -121,8 +132,9 @@ declaring victory. Then log in once through Google.
 
 ### Later deploys
 
-- **Deploy:** push your branch, merge, then `npm run deploy` from the merge
-  commit on a machine with Docker. Secrets persist across deploys.
+- **Deploy:** push your branch, merge, then `npx wrangler deploy -c
+  wrangler.jsonc` from the merge commit on a machine with Docker. Secrets
+  persist across deploys. (`npm run deploy` is disabled since retirement.)
 - **Secret changes:** `npx wrangler secret put NAME --name google-group-maker`
   (or `secret bulk <file>`). A warm Durable Object keeps the env it was
   constructed with, so the env-fingerprint check may not notice the change —
@@ -133,6 +145,34 @@ declaring victory. Then log in once through Google.
   Cloudflare entirely, delete the `<hostname>` worker domain
   (`DELETE /accounts/{acct}/workers/domains/{id}`); the wildcard record then
   resolves the name to the old host again — no DNS record to restore.
+
+## Returning to Cloudflare
+
+The Worker was left in place without a route, with the secrets it had at
+retirement. Those values may since have drifted from the Docker host:
+
+1. Sync the secrets from the Docker host. `npx wrangler secret list --name
+   google-group-maker` shows only which names exist, not their values, so
+   write the intended values with `npx wrangler secret bulk <file>` (or
+   `secret put`), using a file outside the repo created with `umask 077`:
+   every secret named in `wrangler.jsonc`, from the host's `.env`, with
+   `GOOGLE_SERVICE_ACCOUNT_JSON` set to `service-account-credentials.json` on
+   one line. Delete the file afterwards. `secret bulk` does not remove names
+   missing from the file, so compare `secret list` with the host's `.env` and
+   `npx wrangler secret delete NAME --name google-group-maker` any the host no
+   longer uses (for example `SLACK_WEBHOOK_URL`). Minted keys in the host's
+   `groups-data` volume do not carry over; their clients need the master key
+   or new keys.
+2. Add `"routes": [{ "pattern": "<hostname>", "custom_domain": true }]` back to
+   `wrangler.jsonc`.
+3. `npx wrangler deploy -c wrangler.jsonc` (the `npm run deploy` script is
+   disabled on purpose). This recreates the container application and binds
+   the hostname, which takes precedence over the wildcard record.
+4. Verify on the Worker before stopping Docker: `/health` only proves the
+   process is up, so also log in through Google and make one authenticated
+   read, e.g. `curl -H "X-API-Key: ..." https://<hostname>/api/groups`.
+5. Then stop the Docker host's container with `docker compose stop`, never
+   `down -v`, which would delete the key volume.
 
 ## Caveats
 

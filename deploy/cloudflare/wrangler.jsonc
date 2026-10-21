@@ -1,5 +1,6 @@
-// groups.tk.sg: Worker in front of one Cloudflare Container running
-// web/Dockerfile unchanged. See README.md.
+// RETIRED: rollback only. Production is docker-compose.yml on the Docker host.
+// No routes on purpose, so a deploy cannot take groups.tk.sg back; see
+// README.md, "Returning to Cloudflare".
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "google-group-maker",
@@ -8,7 +9,6 @@
   "compatibility_date": "2026-10-16",
   "workers_dev": false,
   "preview_urls": false,
-  "routes": [{ "pattern": "groups.tk.sg", "custom_domain": true }],
   "containers": [
     {
       "class_name": "GroupMaker",

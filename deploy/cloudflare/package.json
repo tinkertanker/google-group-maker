@@ -4,7 +4,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "dry-run": "wrangler deploy --dry-run -c wrangler.jsonc",
-    "deploy": "wrangler deploy -c wrangler.jsonc"
+    "deploy": "echo 'Cloudflare hosting is retired; production is docker-compose.yml on the Docker host. See README.md, Returning to Cloudflare.' >&2 && exit 1"
   },
   "dependencies": {
     "@cloudflare/containers": "0.3.7"

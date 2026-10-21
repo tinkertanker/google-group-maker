@@ -53,6 +53,11 @@ hostname and the proxy terminates TLS). The checkout on that host holds:
 - the `groups-data` named volume: `data/apikeys.db`, the minted API keys and
   their audit log. Keep it; recreating the container does not touch it.
 
+Run these in the production checkout. Its directory is `groups`, so Compose
+uses project `groups`: image `groups-groups`, volume `groups_groups-data`. From
+any other directory, pass `-p groups` so you reuse that volume instead of
+creating an empty one. Never run `docker compose down -v`; it deletes the keys.
+
 Deploy from `main`:
 
 ```bash

@@ -19,7 +19,7 @@ except ImportError:
 from fastapi import FastAPI, Request, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import RedirectResponse
+from fastapi.responses import PlainTextResponse, RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 
 # Add parent directory to path for imports
@@ -70,6 +70,12 @@ async def index(request: Request, user: dict = Depends(get_current_user)):
     if not user:
         return RedirectResponse(url="/auth/login")
     return RedirectResponse(url="/groups")
+
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+async def robots():
+    """Internal tool: keep crawlers off it, notably the /api/* URLs in the docs."""
+    return "User-agent: *\nDisallow: /\n"
 
 
 @app.get("/health")

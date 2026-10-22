@@ -25,7 +25,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
 
@@ -43,17 +43,21 @@ API_KEY = os.environ.get("API_KEY", "")
 api_key_scheme = APIKeyHeader(name="x-api-key", auto_error=False)
 
 
-def require_api_key(provided: Optional[str] = Depends(api_key_scheme)) -> dict:
+def require_api_key(
+    request: Request, provided: Optional[str] = Depends(api_key_scheme)
+) -> dict:
     """Require a valid X-API-Key header. Returns the matched key's info."""
+    # Name the caller so a crawler can be told apart from a broken integration.
+    origin = f"{request.method} {request.url.path}, user agent `{request.headers.get('user-agent', 'none')[:200]}`"
     if not provided:
-        alerts.notify_auth_failure("missing X-API-Key header")
+        alerts.notify_auth_failure(f"missing X-API-Key header ({origin})")
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
     # Master key from env (bootstrap / recovery if the key DB is lost)
     if API_KEY and hmac.compare_digest(provided.encode(), API_KEY.encode()):
         return {"id": None, "name": "env API_KEY", "prefix": "env"}
     key = apikeys.lookup_key(provided)
     if not key:
-        alerts.notify_auth_failure(f"invalid or revoked key ({provided[:12]}…)")
+        alerts.notify_auth_failure(f"invalid or revoked key {provided[:12]}… ({origin})")
         raise HTTPException(status_code=401, detail="Invalid or revoked API key")
     return key
 

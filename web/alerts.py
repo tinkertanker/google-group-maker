@@ -47,6 +47,18 @@ def send_slack_alert(text: str) -> None:
         pass
 
 
+def inert(value: str, limit: int = 200) -> str:
+    """Make caller-supplied text safe inside a backtick span of a Slack
+    message: one bounded line, no mentions or links, no code-span breakout."""
+    value = "".join(c if c.isprintable() else "?" for c in value[:limit])
+    return (
+        value.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("`", "'")
+    )
+
+
 def notify_api_use(key: dict, message: str, status: int) -> None:
     """Alert that an API key was used. `message` is a verb phrase, e.g.
     'added a@b.com to g@domain', so it reads '<key> added a@b.com to …'."""

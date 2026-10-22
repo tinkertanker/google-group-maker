@@ -72,7 +72,7 @@ async def index(request: Request, user: dict = Depends(get_current_user)):
     return RedirectResponse(url="/groups")
 
 
-@app.get("/robots.txt", response_class=PlainTextResponse)
+@app.api_route("/robots.txt", methods=["GET", "HEAD"], response_class=PlainTextResponse)
 async def robots():
     """Internal tool: keep crawlers off it, notably the /api/* URLs in the docs."""
     return "User-agent: *\nDisallow: /\n"

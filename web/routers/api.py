@@ -43,21 +43,30 @@ API_KEY = os.environ.get("API_KEY", "")
 api_key_scheme = APIKeyHeader(name="x-api-key", auto_error=False)
 
 
+def _origin(request: Request) -> str:
+    """Name a rejected caller so a crawler can be told apart from a broken
+    integration. Uses the route template, not the concrete path, so group
+    emails stay out of Slack; both fields are caller-controlled."""
+    route = getattr(request.scope.get("route"), "path", None) or request.scope["path"]
+    agent = request.headers.get("user-agent", "none")
+    return f"{request.method} `{alerts.inert(route)}`, user agent `{alerts.inert(agent)}`"
+
+
 def require_api_key(
     request: Request, provided: Optional[str] = Depends(api_key_scheme)
 ) -> dict:
     """Require a valid X-API-Key header. Returns the matched key's info."""
-    # Name the caller so a crawler can be told apart from a broken integration.
-    origin = f"{request.method} {request.url.path}, user agent `{request.headers.get('user-agent', 'none')[:200]}`"
     if not provided:
-        alerts.notify_auth_failure(f"missing X-API-Key header ({origin})")
+        alerts.notify_auth_failure(f"missing X-API-Key header ({_origin(request)})")
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
     # Master key from env (bootstrap / recovery if the key DB is lost)
     if API_KEY and hmac.compare_digest(provided.encode(), API_KEY.encode()):
         return {"id": None, "name": "env API_KEY", "prefix": "env"}
     key = apikeys.lookup_key(provided)
     if not key:
-        alerts.notify_auth_failure(f"invalid or revoked key {provided[:12]}… ({origin})")
+        alerts.notify_auth_failure(
+            f"invalid or revoked key `{alerts.inert(provided[:12])}…` ({_origin(request)})"
+        )
         raise HTTPException(status_code=401, detail="Invalid or revoked API key")
     return key
 
